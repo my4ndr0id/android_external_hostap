@@ -2716,6 +2716,9 @@ void wpa_supplicant_deinit(struct wpa_global *global)
 	if (global == NULL)
 		return;
 
+#ifdef ANDROID
+	wpa_supplicant_terminate(0, global);
+#endif /* ANDROID */
 #ifdef CONFIG_P2P
 	wpas_p2p_deinit_global(global);
 #endif /* CONFIG_P2P */
