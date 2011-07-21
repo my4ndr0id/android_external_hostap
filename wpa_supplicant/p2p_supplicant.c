@@ -499,8 +499,15 @@ static void wpas_group_formation_completed(struct wpa_supplicant *wpa_s,
 		client = ssid->mode == WPAS_MODE_INFRA;
 		if (ssid->mode == WPAS_MODE_P2P_GO) {
 			persistent = ssid->p2p_persistent_group;
+#ifndef ANDROID_BRCM_P2P_PATCH
 			os_memcpy(go_dev_addr, wpa_s->parent->own_addr,
 				  ETH_ALEN);
+#else
+			/* P2P_ADDR: Use p2p_dev_addr instead of own mac addr */
+			os_memcpy(go_dev_addr, wpa_s->global->p2p_dev_addr,
+				  ETH_ALEN);
+
+#endif
 		} else
 			persistent = wpas_p2p_persistent_group(wpa_s,
 							       go_dev_addr,
@@ -665,13 +672,22 @@ static void p2p_go_configured(void *ctx, void *data)
 			wpa_ssid_txt(ssid->ssid, ssid->ssid_len),
 			ssid->frequency,
 			params->passphrase ? params->passphrase : "",
+#ifndef ANDROID_BRCM_P2P_PATCH
 			MAC2STR(wpa_s->parent->own_addr),
+#else
+			/* P2P_ADDR: use p2p_dev_addr instead of own addr */
+			MAC2STR(wpa_s->global->p2p_dev_addr),
+#endif
 			params->persistent_group ? " [PERSISTENT]" : "");
-
 		if (params->persistent_group)
 			network_id = wpas_p2p_store_persistent_group(
 				wpa_s->parent, ssid,
+#ifndef ANDROID_BRCM_P2P_PATCH
 				wpa_s->parent->own_addr);
+#else
+				/* P2P_ADDR: Use p2p device address */
+				wpa_s->global->p2p_dev_addr);
+#endif
 		if (network_id < 0)
 			network_id = ssid->id;
 		wpas_notify_p2p_group_started(wpa_s, ssid, network_id, 0);
@@ -2138,6 +2154,9 @@ int wpas_p2p_init(struct wpa_global *global, struct wpa_supplicant *wpa_s)
 	struct p2p_config p2p;
 	unsigned int r;
 	int i;
+#ifdef ANDROID_BRCM_P2P_PATCH
+	char buf[200];
+#endif
 
 	if (!(wpa_s->drv_flags & WPA_DRIVER_FLAGS_P2P_CAPABLE))
 		return 0;
@@ -2187,7 +2206,19 @@ int wpas_p2p_init(struct wpa_global *global, struct wpa_supplicant *wpa_s)
 	p2p.invitation_result = wpas_invitation_result;
 	p2p.get_noa = wpas_get_noa;
 
+#ifdef ANDROID_BRCM_P2P_PATCH
+	/* P2P_ADDR: Using p2p_dev_addr to hold the actual p2p device address incase if
+	 * we are not using the primary interface for p2p operations.
+	 */
+	wpa_drv_driver_cmd(wpa_s,  "P2P_DEV_ADDR", buf, sizeof(buf));	
+	os_memcpy(p2p.p2p_dev_addr, buf, ETH_ALEN);
+	os_memcpy(wpa_s->global->p2p_dev_addr, buf, ETH_ALEN);
+	os_memcpy(p2p.dev_addr, buf, ETH_ALEN);
+	wpa_printf(MSG_DEBUG, "P2P: Device address ("MACSTR")", MAC2STR(p2p.p2p_dev_addr));
+#else
 	os_memcpy(wpa_s->global->p2p_dev_addr, wpa_s->own_addr, ETH_ALEN);
+#endif
+
 	os_memcpy(p2p.dev_addr, wpa_s->own_addr, ETH_ALEN);
 	p2p.dev_name = wpa_s->conf->device_name;
 	p2p.manufacturer = wpa_s->conf->manufacturer;
