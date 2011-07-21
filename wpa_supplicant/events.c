@@ -2036,6 +2036,11 @@ void wpa_supplicant_event(void *ctx, enum wpa_event_type event,
 		}
 #endif /* CONFIG_AP */
 		wpa_supplicant_event_disassoc(wpa_s, reason_code);
+
+#if defined(ANDROID_BRCM_P2P_PATCH) && defined(CONFIG_P2P)
+		wpas_p2p_group_remove_notif(wpa_s, reason_code);
+#endif
+
 		break;
 	case EVENT_MICHAEL_MIC_FAILURE:
 		wpa_supplicant_event_michael_mic_failure(wpa_s, data);
