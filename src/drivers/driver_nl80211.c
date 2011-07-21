@@ -7149,6 +7149,35 @@ static int wpa_driver_nl80211_probe_req_report(void *priv, int report)
 				   NULL, 0) < 0)
 		goto out_err;
 
+#ifdef ANDROID_BRCM_P2P_PATCH 
+	if (nl80211_register_frame(drv, bss->nl_preq.handle,
+			   (WLAN_FC_TYPE_MGMT << 2) |
+			   (WLAN_FC_STYPE_ASSOC_REQ << 4),
+			   NULL, 0) < 0) {
+		goto out_err;
+	}
+
+	if (nl80211_register_frame(drv, bss->nl_preq.handle,
+			   (WLAN_FC_TYPE_MGMT << 2) |
+			   (WLAN_FC_STYPE_REASSOC_REQ << 4),
+			   NULL, 0) < 0) {
+		goto out_err;
+	}
+
+	if (nl80211_register_frame(drv, bss->nl_preq.handle,
+			   (WLAN_FC_TYPE_MGMT << 2) |
+			   (WLAN_FC_STYPE_DISASSOC << 4),
+			   NULL, 0) < 0) {
+		goto out_err;
+	}
+	
+	if (nl80211_register_frame(drv, bss->nl_preq.handle,
+					   (WLAN_FC_TYPE_MGMT << 2) |
+					   (WLAN_FC_STYPE_DEAUTH << 4),
+					   NULL, 0) < 0) {
+		goto out_err;
+	}
+#endif
 	eloop_register_read_sock(nl_socket_get_fd(bss->nl_preq.handle),
 				 wpa_driver_nl80211_event_receive, drv,
 				 bss->nl_preq.handle);
