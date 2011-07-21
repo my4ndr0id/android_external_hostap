@@ -578,6 +578,11 @@ int p2p_add_device(struct p2p_data *p2p, const u8 *addr, int freq, int level,
 			freq, msg.ds_params ? *msg.ds_params : -1);
 	}
 	dev->listen_freq = freq;
+#ifdef ANDROID_BRCM_P2P_PATCH
+	if (msg.group_info)
+		dev->go_state = REMOTE_GO;
+#endif /* ANDROID_BRCM_P2P_PATCH */
+
 	if (msg.group_info)
 		dev->oper_freq = freq;
 	dev->info.level = level;
