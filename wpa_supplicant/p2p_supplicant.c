@@ -3796,7 +3796,8 @@ void wpas_p2p_group_remove_notif(struct wpa_supplicant *wpa_s, u16 reason_code)
 
 		wpa_printf(MSG_DEBUG, "P2P: [EVENT_DEAUTH] Removing P2P_CLIENT virtual intf.");
 		wpa_supplicant_cancel_scan(wpa_s);
-		wpas_p2p_interface_unavailable(wpa_s);
+		wpa_s->removal_reason = P2P_GROUP_REMOVAL_UNAVAILABLE;
+		wpas_p2p_group_delete(wpa_s);
 	}
 }
 #endif
