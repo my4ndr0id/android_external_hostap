@@ -5425,6 +5425,8 @@ static int wpa_driver_nl80211_ap(struct wpa_driver_nl80211_data *drv,
 		}
 	}
 
+	wpa_printf(MSG_DEBUG, "nl80211: Update ap_oper_freq with params->freq "
+		   "%d", params->freq);
 	drv->ap_oper_freq = params->freq;
 
 	return 0;
