@@ -4307,11 +4307,7 @@ static int wpa_driver_nl80211_send_mlme(void *priv, const u8 *data,
 	mgmt = (struct ieee80211_mgmt *) data;
 	fc = le_to_host16(mgmt->frame_control);
 
-#ifndef ANDROID_BRCM_P2P_PATCH
 	if (is_sta_interface(drv->nlmode) &&
-#else
-	if (
-#endif
 	    WLAN_FC_GET_TYPE(fc) == WLAN_FC_TYPE_MGMT &&
 	    WLAN_FC_GET_STYPE(fc) == WLAN_FC_STYPE_PROBE_RESP) {
 		/*
@@ -4324,11 +4320,23 @@ static int wpa_driver_nl80211_send_mlme(void *priv, const u8 *data,
 					      1);
 	}
 
+#ifdef ANDROID_BRCM_P2P_PATCH
+	if (is_ap_interface(drv->nlmode)) {
+		wpa_printf(MSG_DEBUG, "%s: Sending frame on ap_oper_freq %d "
+			   "using nl80211_send_frame_cmd", __func__,
+			   drv->ap_oper_freq);
+		return nl80211_send_frame_cmd(bss, drv->ap_oper_freq, 0,
+					      data, data_len,
+					      &drv->send_action_cookie, 0,
+					      noack, 0);
+	}
+#else /* ANDROID_BRCM_P2P_PATCH */
 	if (drv->device_ap_sme && is_ap_interface(drv->nlmode)) {
 		return nl80211_send_frame_cmd(bss, drv->ap_oper_freq, 0,
 					      data, data_len, NULL, 0, noack,
 					      0);
 	}
+#endif /* ANDROID_BRCM_P2P_PATCH */
 
 	if (WLAN_FC_GET_TYPE(fc) == WLAN_FC_TYPE_MGMT &&
 	    WLAN_FC_GET_STYPE(fc) == WLAN_FC_STYPE_AUTH) {
@@ -4344,6 +4352,8 @@ static int wpa_driver_nl80211_send_mlme(void *priv, const u8 *data,
 			encrypt = 0;
 	}
 
+	wpa_printf(MSG_DEBUG, "%s: Sending frame using monitor interface/"
+		   "l2 socket", __func__);
 	return wpa_driver_nl80211_send_frame(drv, data, data_len, encrypt,
 					     noack);
 }
