@@ -3276,6 +3276,14 @@ static int wpa_supplicant_driver_cmd(struct wpa_supplicant *wpa_s, char *cmd,
 {
 	int ret;
 
+#ifdef ANDROID
+	if (os_strcasecmp(cmd, "BGSCAN-START") == 0)
+		return pno_start(wpa_s);
+
+	if (os_strcasecmp(cmd, "BGSCAN-STOP") == 0)
+		return pno_stop(wpa_s);
+#endif /* ANDROID */
+
 	ret = wpa_drv_driver_cmd(wpa_s, cmd, buf, buflen);
 	if (ret == 0)
 		ret = sprintf(buf, "%s\n", "OK");
