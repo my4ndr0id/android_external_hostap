@@ -20,6 +20,18 @@ ifeq ($(BOARD_WLAN_DEVICE), bcmdhd)
 L_CFLAGS += -DANDROID_BRCM_P2P_PATCH
 endif
 
+ifeq ($(BOARD_WLAN_DEVICE), qcwcn)
+L_CFLAGS += -DANDROID_QCOM_P2P_PATCH
+endif
+
+# Use Android specific directory for control interface sockets
+L_CFLAGS += -DCONFIG_CTRL_IFACE_CLIENT_DIR=\"/data/misc/wifi/sockets\"
+L_CFLAGS += -DCONFIG_CTRL_IFACE_DIR=\"/data/misc/wifi/hostapd\"
+
+ifdef CONFIG_AP
+L_CFLAGS += -DCONFIG_AP
+endif
+
 # To force sizeof(enum) = 4
 ifeq ($(TARGET_ARCH),arm)
 L_CFLAGS += -mabi=aapcs-linux

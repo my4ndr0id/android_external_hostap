@@ -1717,7 +1717,7 @@ static int is_11b(u8 rate)
 }
 
 
-static int supp_rates_11b_only(struct ieee802_11_elems *elems)
+int supp_rates_11b_only(struct ieee802_11_elems *elems)
 {
 	int num_11b = 0, num_others = 0;
 	int i;

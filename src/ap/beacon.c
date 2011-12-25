@@ -233,6 +233,16 @@ void handle_probe_req(struct hostapd_data *hapd,
 	}
 
 #ifdef CONFIG_P2P
+	if (hapd->p2p) {
+	        if (supp_rates_11b_only(&elems)) {
+	                wpa_printf(MSG_DEBUG, "STA " MACSTR " sent probe request "
+	                   "with 11b rates only",
+	                   MAC2STR(mgmt->sa));
+	                /* Indicates support for 11b rates only */
+	                return;
+	        }
+	}
+
 	if (hapd->p2p && elems.wps_ie) {
 		struct wpabuf *wps;
 		wps = ieee802_11_vendor_ie_concat(ie, ie_len, WPS_DEV_OUI_WFA);

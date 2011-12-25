@@ -795,6 +795,23 @@ static void mlme_event_assoc(struct wpa_driver_nl80211_data *drv,
 		event.assoc_info.addr = mgmt->sa;
 	} else {
 #endif
+#if (defined (CONFIG_AP) || defined (HOSTAPD) ) && defined (ANDROID_QCOM_P2P_PATCH)
+	if (drv->nlmode == NL80211_IFTYPE_AP || drv->nlmode == NL80211_IFTYPE_P2P_GO) {
+		if (len < 24 + sizeof(mgmt->u.assoc_req)) {
+			wpa_printf(MSG_DEBUG, "nl80211: Too short association event "
+			   "frame");
+			return;
+		}
+		os_memset(&event, 0, sizeof(event));
+		event.assoc_info.freq = drv->assoc_freq;
+		event.assoc_info.resp_ies = (u8 *) mgmt->u.assoc_resp.variable;
+		event.assoc_info.resp_ies_len =
+			len - 24 - sizeof(mgmt->u.assoc_resp);
+		event.assoc_info.req_ies = (u8 *) mgmt->u.assoc_resp.variable;
+		event.assoc_info.req_ies_len = len - 24 - sizeof(mgmt->u.assoc_resp);
+		event.assoc_info.addr = mgmt->da;
+	} else {
+#endif
 	if (len < 24 + sizeof(mgmt->u.assoc_resp)) {
 		wpa_printf(MSG_DEBUG, "nl80211: Too short association event "
 			   "frame");
@@ -829,6 +846,9 @@ static void mlme_event_assoc(struct wpa_driver_nl80211_data *drv,
 
 	event.assoc_info.freq = drv->assoc_freq;
 #if (defined (CONFIG_AP) || defined(HOSTAPD)) && defined (ANDROID_BRCM_P2P_PATCH)
+	}
+#endif
+#if (defined (CONFIG_AP) || defined(HOSTAPD)) && defined (ANDROID_QCOM_P2P_PATCH)
 	}
 #endif
 
@@ -907,7 +927,7 @@ static void mlme_event_disconnect(struct wpa_driver_nl80211_data *drv,
 	os_memset(&data, 0, sizeof(data));
 	if (reason) {
 		data.disassoc_info.reason_code = nla_get_u16(reason);
-#ifdef ANDROID_BRCM_P2P_PATCH
+#ifdef ANDROID
 		/*
 		 * The driver uses one of the reason codes to indicate that the
 		 * firmware has crashed. This event trigger reloading of the
@@ -918,10 +938,10 @@ static void mlme_event_disconnect(struct wpa_driver_nl80211_data *drv,
 		 * with reason code "unspecified" and that would trigger this
 		 * reloading unnecessarily..
 		 */
-		if (data.disassoc_info.reason_code == WLAN_REASON_UNSPECIFIED)
+		if (data.disassoc_info.reason_code == WLAN_REASON_DISASSOC_LOW_ACK)
 			wpa_msg(drv->ctx, MSG_INFO,
 				WPA_EVENT_DRIVER_STATE "HANGED");
-#endif /* ANDROID_BRCM_P2P_PATCH */
+#endif
 	}
 	wpa_supplicant_event(drv->ctx, EVENT_DISASSOC, &data);
 }
@@ -1068,7 +1088,7 @@ static void mlme_event_deauth_disassoc(struct wpa_driver_nl80211_data *drv,
 		reason_code = le_to_host16(mgmt->u.deauth.reason_code);
 
 	if (type == EVENT_DISASSOC) {
-#ifdef ANDROID_BRCM_P2P_PATCH
+#if (defined (ANDROID_BRCM_P2P_PATCH) || defined(ANDROID_QCOM_P2P_PATCH))
 		if (is_ap_interface(drv->nlmode)) {
 			event.disassoc_info.addr = mgmt->sa;
 		} else
@@ -1081,7 +1101,7 @@ static void mlme_event_deauth_disassoc(struct wpa_driver_nl80211_data *drv,
 				mgmt->u.disassoc.variable;
 		}
 	} else {
-#ifdef ANDROID_BRCM_P2P_PATCH
+#if (defined (ANDROID_BRCM_P2P_PATCH) || defined(ANDROID_QCOM_P2P_PATCH))
 		if (is_ap_interface(drv->nlmode)) {
 			event.deauth_info.addr = mgmt->sa;
 		} else
@@ -7231,7 +7251,7 @@ static int wpa_driver_nl80211_probe_req_report(void *priv, int report)
 				   NULL, 0) < 0)
 		goto out_err;
 
-#ifdef ANDROID_BRCM_P2P_PATCH 
+#ifdef ANDROID_BRCM_P2P_PATCH
 	if (nl80211_register_frame(drv, bss->nl_preq.handle,
 			   (WLAN_FC_TYPE_MGMT << 2) |
 			   (WLAN_FC_STYPE_ASSOC_REQ << 4),
@@ -8103,34 +8123,6 @@ static int wpa_driver_nl80211_driver_cmd(void *priv, char *cmd, char *buf,
 		if (!ret && (state != -1))
 			ret = os_snprintf(buf, buf_len, "POWERMODE = %d\n",
 					  state);
-	} else { /* Use private command */
-		memset(&ifr, 0, sizeof(ifr));
-		memset(&priv_cmd, 0, sizeof(priv_cmd));
-		os_memcpy(buf, cmd, strlen(cmd) + 1);
-		os_strncpy(ifr.ifr_name, bss->ifname, IFNAMSIZ);
-
-		priv_cmd.buf = buf;
-		priv_cmd.used_len = buf_len;
-		priv_cmd.total_len = buf_len;
-		ifr.ifr_data = &priv_cmd;
-
-		if ((ret = ioctl(drv->global->ioctl_sock, SIOCDEVPRIVATE + 1,
-				 &ifr)) < 0) {
-			wpa_printf(MSG_ERROR, "%s: failed to issue private "
-				   "commands\n", __func__);
-			wpa_driver_send_hang_msg(drv);
-		} else {
-			drv_errors = 0;
-			ret = 0;
-			if ((os_strcasecmp(cmd, "LINKSPEED") == 0) ||
-			    (os_strcasecmp(cmd, "RSSI") == 0) ||
-			    (os_strcasecmp(cmd, "GETBAND") == 0) ||
-			    (os_strcasecmp(cmd, "P2P_GET_NOA") == 0))
-				ret = strlen(buf);
-
-			wpa_printf(MSG_DEBUG, "%s %s len = %d, %d", __func__,
-				   buf, ret, strlen(buf));
-		}
 	}
 
 	return ret;
