@@ -1,6 +1,7 @@
 /*
  * WPA Supplicant / Control interface (shared code for all backends)
  * Copyright (c) 2004-2010, Jouni Malinen <j@w1.fi>
+ * Copyright (c) 2011, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -3827,6 +3828,23 @@ char * wpa_supplicant_ctrl_iface_process(struct wpa_supplicant *wpa_s,
 	} else if (os_strncmp(buf, "DRIVER ", 7) == 0) {
 		reply_len = wpa_supplicant_driver_cmd(wpa_s, buf + 7, reply,
 						      reply_size);
+#ifdef ANDROID
+#ifdef SEAMLESS_ROAMING
+	} else if (os_strncmp(buf, "SEAMLESS_ROAMING ", 17) == 0) {
+		int en;
+
+		en = atoi(buf+17);
+		if (en) {
+			wpa_s->en_roaming = 1;
+			os_memcpy(reply, "ENABLE\n", 7);
+			reply_len = 7;
+		} else {
+			wpa_s->en_roaming = 0;
+			os_memcpy(reply, "DISABLE\n", 8);
+			reply_len = 8;
+		}
+#endif
+#endif
 	} else {
 		os_memcpy(reply, "UNKNOWN COMMAND\n", 16);
 		reply_len = 16;
