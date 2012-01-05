@@ -3778,8 +3778,9 @@ static void wpas_p2p_set_group_idle_timeout(struct wpa_supplicant *wpa_s)
 	unsigned int timeout;
 
 	eloop_cancel_timeout(wpas_p2p_group_idle_timeout, wpa_s, NULL);
-	if (wpa_s->conf->p2p_group_idle == 0)
-		return;
+
+        if (wpa_s->current_ssid == NULL || !wpa_s->current_ssid->p2p_group)
+                return;
 
 	timeout = wpa_s->conf->p2p_group_idle;
 	if (wpa_s->current_ssid->mode == WPAS_MODE_INFRA &&
