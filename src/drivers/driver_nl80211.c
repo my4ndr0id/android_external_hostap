@@ -5,7 +5,7 @@
  * Copyright (c) 2005-2006, Devicescape Software, Inc.
  * Copyright (c) 2007, Johannes Berg <johannes@sipsolutions.net>
  * Copyright (c) 2009-2010, Atheros Communications
- * Copyright (c) 2011, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2011-2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -4854,7 +4854,7 @@ static int wpa_driver_nl80211_set_ap(void *priv,
 		nl80211_set_bss(bss, params->cts_protect, params->preamble,
 				params->short_slot_time, params->ht_opmode);
 	}
-#if defined(ANDROID_BRCM_P2P_PATCH) && defined(HOSTAPD)
+#if ((defined(ANDROID_BRCM_P2P_PATCH) || defined(ANDROID_QCOM_P2P_PATCH)) && defined(HOSTAPD))
 	wpa_driver_nl80211_probe_req_report(priv, 1);
 #endif
 	return ret;
