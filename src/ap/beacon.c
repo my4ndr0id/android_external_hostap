@@ -3,6 +3,7 @@
  * Copyright (c) 2002-2004, Instant802 Networks, Inc.
  * Copyright (c) 2005-2006, Devicescape Software, Inc.
  * Copyright (c) 2008-2009, Jouni Malinen <j@w1.fi>
+ * Copyright (c) 2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -438,6 +439,84 @@ void handle_probe_req(struct hostapd_data *hapd,
 
 #endif /* NEED_AP_MLME */
 
+static u8 *hostapd_eid_accept_mac(struct hostapd_data *hapd, u8 *eid,
+								size_t max_len)
+{
+	u8 *pos;
+	u8 count = 0;
+	struct mac_acl_entry *mac;
+
+	wpa_printf(MSG_DEBUG, "hostapd_eid_accept_mac num_accept_mac:%d\n",
+						hapd->conf->num_accept_mac);
+
+	if (max_len < ETH_ALEN*(hapd->conf->num_accept_mac+1)) {
+		wpa_printf(MSG_ERROR, "beacon tail buf size not enough "
+						"to fit deny mac acl list\n");
+		return eid;
+	}
+	eid[0] = WLAN_EID_VENDOR_SPECIFIC;
+	/*temporary value  of  OUI for deny MAC is - 00 50 00 01 */
+	eid[2] = 0x00;
+	eid[3] = 0x50;
+	eid[4] = 0x00;
+	eid[5] = 0x01;
+	/* IE type+length+ OUI */
+	pos = eid + 6;
+
+	*pos++ = hapd->conf->macaddr_acl;
+	*pos++ = hapd->conf->num_accept_mac;
+	mac = hapd->conf->accept_mac;
+
+	for (count = 0; count < hapd->conf->num_accept_mac; count++) {
+		os_memcpy(pos, mac, sizeof(struct mac_acl_entry));
+		mac++;
+		pos = pos + sizeof(struct mac_acl_entry);
+	}
+
+	/* Length */
+	eid[1] = (pos - eid) - 2;
+	return pos;
+}
+
+static u8 *hostapd_eid_deny_mac(struct hostapd_data *hapd, u8 *eid,
+								size_t max_len)
+{
+	u8 *pos;
+	u8 count = 0;
+	struct mac_acl_entry *mac;
+
+	wpa_printf(MSG_DEBUG, "hostapd_eid_deny_mac num_deny_mac:%d\n",
+						hapd->conf->num_deny_mac);
+
+	if (max_len < ETH_ALEN*(hapd->conf->num_deny_mac+1)) {
+		wpa_printf(MSG_ERROR, "beacon tail buf size not enough "
+						"to fit deny mac acl list\n");
+		return eid;
+	}
+
+	eid[0] = WLAN_EID_VENDOR_SPECIFIC;
+	/*temporary value  of  OUI for deny MAC is - 00 50 00 00 */
+	eid[2] = 0x00;
+	eid[3] = 0x50;
+	eid[4] = 0x00;
+	eid[5] = 0x00;
+	/* IE type+length+ OUI */
+	pos = eid + 6;
+
+	*pos++ = hapd->conf->macaddr_acl;
+	*pos++ = hapd->conf->num_deny_mac;
+	mac = hapd->conf->deny_mac;
+
+	for (count = 0; count < hapd->conf->num_deny_mac; count++) {
+		os_memcpy(pos, mac, sizeof(struct mac_acl_entry));
+		mac++;
+		pos = pos + sizeof(struct mac_acl_entry);
+	}
+
+	/* Length */
+	eid[1] = (pos - eid) - 2;
+	return pos;
+}
 
 void ieee802_11_set_beacon(struct hostapd_data *hapd)
 {
@@ -546,6 +625,13 @@ void ieee802_11_set_beacon(struct hostapd_data *hapd)
 
 	/* Wi-Fi Alliance WMM */
 	tailpos = hostapd_eid_wmm(hapd, tailpos);
+
+	/* verify deny_mac is updated */
+	tailpos = hostapd_eid_deny_mac(hapd, tailpos,
+			tail + BEACON_TAIL_BUF_SIZE - tailpos);
+	/* verify accept_mac is updated */
+	tailpos = hostapd_eid_accept_mac(hapd, tailpos,
+			tail + BEACON_TAIL_BUF_SIZE - tailpos);
 
 #ifdef CONFIG_WPS
 	if (hapd->conf->wps_state && hapd->wps_beacon_ie) {
