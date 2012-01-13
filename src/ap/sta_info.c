@@ -771,9 +771,18 @@ void ap_sta_stop_sa_query(struct hostapd_data *hapd, struct sta_info *sta)
 void ap_sta_set_authorized(struct hostapd_data *hapd, struct sta_info *sta,
 			   int authorized)
 {
+#ifdef CONFIG_P2P
+	enum p2p_connection_state state;
+#endif /* CONFIG_P2P */
 	if (!!authorized == !!(sta->flags & WLAN_STA_AUTHORIZED))
 		return;
+#ifdef CONFIG_P2P
+	state = authorized ? CONNECTED : DISCONNECTED;
 
+	if (hapd->p2p != NULL) {
+		p2p_set_peer_connection_state(hapd->p2p, state, sta->addr);
+	}
+#endif /* CONFIG_P2P */
 	if (authorized) {
 		const u8 *dev_addr = NULL;
 #ifdef CONFIG_P2P

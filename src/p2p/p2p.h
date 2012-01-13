@@ -715,6 +715,25 @@ struct p2p_config {
 	void (*invitation_result)(void *ctx, int status, const u8 *bssid);
 };
 
+enum p2p_connection_state {
+	UNKNOWN,
+	CONNECTED,
+	DISCONNECTED
+};
+
+/**
+ * p2p_set_peer_connection_state - Set connection state for peer device
+ * @p2p: P2P module context from p2p_init()
+ * @state: P2P connection state to be set
+ * @addr: P2P peer entry to be set
+ *
+ * This command removes the P2P module state like peer device entries.
+ */
+
+void p2p_set_peer_connection_state(struct p2p_data *p2p,
+				  enum p2p_connection_state state,
+				  const u8 *addr);
+
 
 /* P2P module initialization/deinitialization */
 

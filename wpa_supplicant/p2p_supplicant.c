@@ -3715,6 +3715,20 @@ void wpas_p2p_completed(struct wpa_supplicant *wpa_s)
 	wpas_notify_p2p_group_started(wpa_s, ssid, network_id, 1);
 }
 
+void wpas_p2p_set_peer_conn_state(struct wpa_supplicant *wpa_s, enum wpa_states wpa_state)
+{
+	enum p2p_connection_state state;
+	if (wpa_state == WPA_COMPLETED)
+		state = CONNECTED;
+	else if (wpa_state == WPA_DISCONNECTED)
+		state = DISCONNECTED;
+	else
+		state = UNKNOWN;
+
+	if (wpa_s->global->p2p != NULL) {
+		p2p_set_peer_connection_state(wpa_s->global->p2p, state, wpa_s->bssid);
+	}
+}
 
 int wpas_p2p_presence_req(struct wpa_supplicant *wpa_s, u32 duration1,
 			  u32 interval1, u32 duration2, u32 interval2)

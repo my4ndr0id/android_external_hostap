@@ -135,4 +135,7 @@ void wpas_p2p_wps_failed(struct wpa_supplicant *wpa_s,
 			 struct wps_event_fail *fail);
 int wpas_p2p_in_progress(struct wpa_supplicant *wpa_s);
 
+void wpas_p2p_set_peer_conn_state(struct wpa_supplicant *wpa_s,
+				enum wpa_states state);
+
 #endif /* P2P_SUPPLICANT_H */
