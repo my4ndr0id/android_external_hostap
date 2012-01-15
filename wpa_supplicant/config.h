@@ -484,6 +484,23 @@ struct wpa_config {
 	 *	<Ki>:<OPc>:<SQN> format
 	 */
 	char *home_milenage;
+
+#ifdef CONFIG_WFD
+	/**
+	* WFD configuration items
+	*/
+	char *wfd_enable;
+	char *wfd_device_type;
+	char *wfd_coupled_sink_supported_by_source;
+	char *wfd_coupled_sink_supported_by_sink;
+	char *wfd_available_for_session;
+	char *wfd_service_discovery_supported;
+	char *wfd_preferred_connectivity;
+	char *wfd_content_protection_supported;
+	char *wfd_time_sync_supported;
+	int wfd_session_mgmt_ctrl_port;
+	int wfd_device_max_throughput;
+#endif
 };
 
 

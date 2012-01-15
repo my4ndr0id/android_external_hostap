@@ -1,7 +1,7 @@
 /*
  * WPA Supplicant - command line interface for wpa_supplicant daemon
  * Copyright (c) 2004-2011, Jouni Malinen <j@w1.fi>
- * Copyright (c) 2011, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2011-2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -2522,6 +2522,27 @@ static int wpa_cli_cmd_p2p_ext_listen(struct wpa_ctrl *ctrl, int argc,
 #endif /* CONFIG_P2P */
 
 
+#ifdef CONFIG_WFD
+static int wpa_cli_cmd_wfd_set(struct wpa_ctrl *ctrl, int argc, char *argv[])
+{
+	char cmd[100];
+	int res;
+
+	if (argc != 2) {
+		printf("Invalid WFD_SET command: needs two arguments (field, "
+		       "value)\n");
+		return -1;
+	}
+
+	res = os_snprintf(cmd, sizeof(cmd), "WFD_SET %s %s", argv[0], argv[1]);
+	if (res < 0 || (size_t) res >= sizeof(cmd))
+		return -1;
+	cmd[sizeof(cmd) - 1] = '\0';
+	return wpa_ctrl_command(ctrl, cmd);
+}
+#endif
+
+
 #ifdef CONFIG_INTERWORKING
 static int wpa_cli_cmd_fetch_anqp(struct wpa_ctrl *ctrl, int argc,
 				  char *argv[])
@@ -3033,7 +3054,10 @@ static struct wpa_cli_cmd wpa_cli_commands[] = {
 	{ "p2p_ext_listen", wpa_cli_cmd_p2p_ext_listen, cli_cmd_flag_none,
 	  "[<period> <interval>] = set extended listen timing" },
 #endif /* CONFIG_P2P */
-
+#ifdef CONFIG_WFD
+	{ "wfd_set", wpa_cli_cmd_wfd_set, cli_cmd_flag_none,
+	  "<field> <value> = set a WFD parameter" },
+#endif
 #ifdef CONFIG_INTERWORKING
 	{ "fetch_anqp", wpa_cli_cmd_fetch_anqp, cli_cmd_flag_none,
 	  "= fetch ANQP information for all APs" },

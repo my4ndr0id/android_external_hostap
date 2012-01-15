@@ -1,7 +1,7 @@
 /*
  * wpa_supplicant - Internal definitions
  * Copyright (c) 2003-2010, Jouni Malinen <j@w1.fi>
- * Copyright (c) 2011, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2011-2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -227,6 +227,9 @@ struct wpa_global {
 	struct dl_list p2p_srv_upnp; /* struct p2p_srv_upnp */
 	int p2p_disabled;
 	int cross_connection;
+#ifdef CONFIG_WFD
+	struct wfd_data *wfd;
+#endif
 };
 
 
