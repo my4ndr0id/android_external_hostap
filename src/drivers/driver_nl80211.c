@@ -7357,7 +7357,7 @@ static int wpa_driver_nl80211_send_action(void *priv, unsigned int freq,
 	os_memcpy(hdr->addr2, src, ETH_ALEN);
 	os_memcpy(hdr->addr3, bssid, ETH_ALEN);
 
-	if (is_ap_interface(drv->nlmode))
+	if (is_ap_interface(drv->nlmode) && (freq == drv->ap_oper_freq))
 		ret = wpa_driver_nl80211_send_mlme(priv, buf, 24 + data_len,
 						   0);
 	else
