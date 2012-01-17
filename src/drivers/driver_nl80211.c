@@ -41,6 +41,9 @@
 #include "linux_ioctl.h"
 #include "radiotap.h"
 #include "radiotap_iter.h"
+#ifdef ANDROID_QCOM_P2P_PATCH
+#include "linux/wireless.h"
+#endif /* ANDROID_QCOM_P2P_PATCH */
 #include "rfkill.h"
 #include "driver.h"
 
@@ -2199,6 +2202,44 @@ nla_put_failure:
 	return -EINVAL;
 }
 
+#ifdef ANDROID_QCOM_P2P_PATCH
+static int wpa_driver_nl80211_set_auth_param(
+	struct wpa_driver_nl80211_data *drv, int idx, u32 value)
+{
+	struct iwreq iwr;
+	int ret = 0;
+
+	os_memset(&iwr, 0, sizeof(iwr));
+	os_strlcpy(iwr.ifr_name, drv->first_bss.ifname, IFNAMSIZ);
+	iwr.u.param.flags = idx & IW_AUTH_INDEX;
+	iwr.u.param.value = value;
+
+	if (ioctl(drv->global->ioctl_sock, SIOCSIWAUTH, &iwr) < 0) {
+
+	if (errno != EOPNOTSUPP) {
+			wpa_printf(MSG_DEBUG, "WEXT: SIOCSIWAUTH(param %d "
+				   "value 0x%x) failed: %s)",
+				   idx, value, strerror(errno));
+		}
+		ret = errno == EOPNOTSUPP ? -2 : -1;
+	}
+
+	return ret;
+}
+#endif /* ANDROID_QCOM_P2P_PATCH */
+
+#ifdef ANDROID_QCOM_P2P_PATCH
+static int wpa_driver_nl80211_set_countermeasures(void *priv,
+					       int enabled)
+{
+	struct i802_bss *bss = priv;
+	struct wpa_driver_nl80211_data *drv = bss->drv;
+
+	return wpa_driver_nl80211_set_auth_param(drv,
+							IW_AUTH_TKIP_COUNTERMEASURES,
+							enabled);
+}
+#endif /* ANDROID_QCOM_P2P_PATCH */
 
 struct wiphy_info_data {
 	struct wpa_driver_capa *capa;
@@ -8516,6 +8557,9 @@ const struct wpa_driver_ops wpa_driver_nl80211_ops = {
 	.sta_add = wpa_driver_nl80211_sta_add,
 	.sta_remove = wpa_driver_nl80211_sta_remove,
 	.hapd_send_eapol = wpa_driver_nl80211_hapd_send_eapol,
+#ifdef ANDROID_QCOM_P2P_PATCH
+	.hapd_set_countermeasures = wpa_driver_nl80211_set_countermeasures,
+#endif /* ANDROID_QCOM_P2P_PATCH */
 	.sta_set_flags = wpa_driver_nl80211_sta_set_flags,
 #ifdef HOSTAPD
 	.hapd_init = i802_init,
