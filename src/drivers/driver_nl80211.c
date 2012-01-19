@@ -4638,8 +4638,9 @@ static int wpa_driver_nl80211_send_mlme(void *priv, const u8 *data,
 #else /* ANDROID_BRCM_P2P_PATCH */
 	if (drv->device_ap_sme && is_ap_interface(drv->nlmode)) {
 		return nl80211_send_frame_cmd(bss, drv->ap_oper_freq, 0,
-					      data, data_len, NULL, 0, noack,
-					      0);
+					      data, data_len,
+					      &drv->send_action_cookie,
+					      0, noack, 0);
 	}
 #endif /* ANDROID_BRCM_P2P_PATCH */
 
