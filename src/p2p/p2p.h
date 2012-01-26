@@ -713,26 +713,16 @@ struct p2p_config {
 	 * local failure in transmitting the Invitation Request.
 	 */
 	void (*invitation_result)(void *ctx, int status, const u8 *bssid);
+
+	/**
+	 * go_connected - Check whether we are connected to a GO
+	 * @ctx: Callback context from cb_ctx
+	 * @dev_addr: P2P Device Address of a GO
+	 * Returns: 1 if we are connected as a P2P client to the specified GO
+	 * or 0 if not.
+	 */
+	int (*go_connected)(void *ctx, const u8 *dev_addr);
 };
-
-enum p2p_connection_state {
-	UNKNOWN,
-	CONNECTED,
-	DISCONNECTED
-};
-
-/**
- * p2p_set_peer_connection_state - Set connection state for peer device
- * @p2p: P2P module context from p2p_init()
- * @state: P2P connection state to be set
- * @addr: P2P peer entry to be set
- *
- * This command removes the P2P module state like peer device entries.
- */
-
-void p2p_set_peer_connection_state(struct p2p_data *p2p,
-				  enum p2p_connection_state state,
-				  const u8 *addr);
 
 
 /* P2P module initialization/deinitialization */
@@ -1525,6 +1515,14 @@ const u8 * p2p_iterate_group_members(struct p2p_group *group, void **next);
  * found
  */
 const u8 * p2p_group_get_dev_addr(struct p2p_group *group, const u8 *addr);
+
+/**
+ * p2p_group_is_client_connected - Check whether a specific client is connected
+ * @group: P2P group context from p2p_group_init()
+ * @addr: P2P Device Address of the client
+ * Returns: 1 if client is connected or 0 if not
+ */
+int p2p_group_is_client_connected(struct p2p_group *group, const u8 *dev_addr);
 
 /**
  * p2p_get_peer_found - Get P2P peer info structure of a found peer

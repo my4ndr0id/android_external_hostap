@@ -2151,6 +2151,26 @@ static int wpas_get_noa(void *ctx, const u8 *interface_addr, u8 *buf,
 }
 
 
+static int wpas_go_connected(void *ctx, const u8 *dev_addr)
+{
+	struct wpa_supplicant *wpa_s = ctx;
+
+	for (wpa_s = wpa_s->global->ifaces; wpa_s; wpa_s = wpa_s->next) {
+		struct wpa_ssid *ssid = wpa_s->current_ssid;
+		if (ssid == NULL)
+			continue;
+		if (ssid->mode != WPAS_MODE_INFRA)
+			continue;
+		if (wpa_s->wpa_state != WPA_COMPLETED)
+			continue;
+		if (os_memcmp(wpa_s->go_dev_addr, dev_addr, ETH_ALEN) == 0)
+			return 1;
+	}
+
+	return 0;
+}
+
+
 /**
  * wpas_p2p_init - Initialize P2P module for %wpa_supplicant
  * @global: Pointer to global data from wpa_supplicant_init()
@@ -2213,6 +2233,7 @@ int wpas_p2p_init(struct wpa_global *global, struct wpa_supplicant *wpa_s)
 	p2p.invitation_received = wpas_invitation_received;
 	p2p.invitation_result = wpas_invitation_result;
 	p2p.get_noa = wpas_get_noa;
+	p2p.go_connected = wpas_go_connected;
 
 #ifdef ANDROID_BRCM_P2P_PATCH
 	/* P2P_ADDR: Using p2p_dev_addr to hold the actual p2p device address incase if
@@ -3715,20 +3736,6 @@ void wpas_p2p_completed(struct wpa_supplicant *wpa_s)
 	wpas_notify_p2p_group_started(wpa_s, ssid, network_id, 1);
 }
 
-void wpas_p2p_set_peer_conn_state(struct wpa_supplicant *wpa_s, enum wpa_states wpa_state)
-{
-	enum p2p_connection_state state;
-	if (wpa_state == WPA_COMPLETED)
-		state = CONNECTED;
-	else if (wpa_state == WPA_DISCONNECTED)
-		state = DISCONNECTED;
-	else
-		state = UNKNOWN;
-
-	if (wpa_s->global->p2p != NULL) {
-		p2p_set_peer_connection_state(wpa_s->global->p2p, state, wpa_s->bssid);
-	}
-}
 
 int wpas_p2p_presence_req(struct wpa_supplicant *wpa_s, u32 duration1,
 			  u32 interval1, u32 duration2, u32 interval2)

@@ -56,14 +56,38 @@ static void p2p_expire_peers(struct p2p_data *p2p)
 {
 	struct p2p_device *dev, *n;
 	struct os_time now;
+	size_t i;
 
 	os_get_time(&now);
 	dl_list_for_each_safe(dev, n, &p2p->devices, struct p2p_device, list) {
-		if (dev->connection_state == CONNECTED) {
-			os_get_time(&dev->last_seen);
-		}
 		if (dev->last_seen.sec + P2P_PEER_EXPIRATION_AGE >= now.sec)
 			continue;
+
+		if (p2p->cfg->go_connected &&
+		    p2p->cfg->go_connected(p2p->cfg->cb_ctx,
+					   dev->info.p2p_device_addr)) {
+			/*
+			 * We are connected as a client to a group in which the
+			 * peer is the GO, so do not expire the peer entry.
+			 */
+			os_get_time(&dev->last_seen);
+			continue;
+		}
+
+		for (i = 0; i < p2p->num_groups; i++) {
+			if (p2p_group_is_client_connected(
+			    p2p->groups[i], dev->info.p2p_device_addr))
+				break;
+		}
+		if (i < p2p->num_groups) {
+			/*
+			 * The peer is connected as a client in a group where
+			 * we are the GO, so do not expire the peer entry.
+			 */
+			os_get_time(&dev->last_seen);
+			continue;
+		}
+
 		wpa_msg(p2p->cfg->msg_ctx, MSG_DEBUG, "P2P: Expiring old peer "
 			"entry " MACSTR, MAC2STR(dev->info.p2p_device_addr));
 		dl_list_del(&dev->list);
@@ -117,21 +141,6 @@ static const char * p2p_state_txt(int state)
 	}
 }
 
-void p2p_set_peer_connection_state(struct p2p_data *p2p,
-				   enum p2p_connection_state state,
-				   const u8 *addr)
-{
-	struct p2p_device *dev, *n;
-
-	dl_list_for_each_safe(dev, n, &p2p->devices, struct p2p_device, list) {
-		if (memcmp(dev->info.p2p_device_addr, addr, ETH_ALEN) == 0) {
-			dev->connection_state = state;
-			wpa_msg(p2p->cfg->msg_ctx, MSG_DEBUG, "P2P: Set connection "
-			"state = %d for peer:" MACSTR, state, MAC2STR(dev->info.p2p_device_addr));
-			break;
-		}
-	}
-}
 
 void p2p_set_state(struct p2p_data *p2p, int new_state)
 {
