@@ -3849,6 +3849,8 @@ int p2p_in_progress(struct p2p_data *p2p)
 #ifdef CONFIG_WFD
 void p2p_set_wfd_data(struct p2p_data *p2p, void *wfd)
 {
+	if (p2p == NULL)
+		return;
 	p2p->wfd = wfd;
 }
 #endif
