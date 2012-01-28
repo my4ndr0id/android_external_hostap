@@ -2040,17 +2040,16 @@ static int process_event(struct nl_msg *msg, void *arg)
 			if (roam_scan_res)
 				wpa_scan_results_free(roam_scan_res);
 			roam_scan_res = nl80211_get_scan_results(drv);
-			if (roam_scan_res == NULL)
-				break;
-			wpa_bss_update_start(wpa_s);
-			for (i = 0; i < roam_scan_res->num; i++)
-				wpa_bss_update_scan_res(wpa_s, roam_scan_res->res[i]);
-			wpa_bss_update_end(wpa_s, NULL, 1);
-			if (!drv->flag_disconnect_state)
-				find_better_ap(drv, NL80211_SEAMLESS_ROAM_MODE_BG);
-			else
-				find_better_ap(drv, NL80211_SEAMLESS_ROAM_MODE_IM);
-			break;
+			if (roam_scan_res != NULL) {
+				wpa_bss_update_start(wpa_s);
+				for (i = 0; i < roam_scan_res->num; i++)
+					wpa_bss_update_scan_res(wpa_s, roam_scan_res->res[i]);
+				wpa_bss_update_end(wpa_s, NULL, 1);
+				if (!drv->flag_disconnect_state)
+					find_better_ap(drv, NL80211_SEAMLESS_ROAM_MODE_BG);
+				else
+					find_better_ap(drv, NL80211_SEAMLESS_ROAM_MODE_IM);
+			}
 		}
 #endif
 #endif
