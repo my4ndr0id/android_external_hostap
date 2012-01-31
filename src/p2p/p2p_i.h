@@ -68,7 +68,7 @@ struct p2p_device {
 	enum p2p_go_state go_state;
 	u8 dialog_token;
 	u8 intended_addr[ETH_ALEN];
-	enum p2p_connection_state connection_state;
+
 	char country[3];
 	struct p2p_channels channels;
 	int oper_freq;

@@ -640,10 +640,6 @@ void wpa_supplicant_set_state(struct wpa_supplicant *wpa_s,
 		wpa_drv_set_supp_port(wpa_s, 0);
 #endif /* IEEE8021X_EAPOL */
 	}
-#ifdef CONFIG_P2P
-	wpas_p2p_set_peer_conn_state(wpa_s, state);
-#endif /* CONFIG_P2P */
-
 	wpa_s->wpa_state = state;
 
 #ifdef CONFIG_BGSCAN
