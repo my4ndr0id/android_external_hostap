@@ -271,6 +271,7 @@ struct wpa_driver_nl80211_data {
 	int roam_scan_data; /* user_data for eloop function */
 	int roam_timeout_data; /* user_data for eloop function */
 	int scan_timeout_data; /* user_data for eloop function */
+	int in_low_rssi_state;
 #endif
 #endif
 };
@@ -377,6 +378,7 @@ static void seamless_roaming_disconnect(struct wpa_driver_nl80211_data *drv)
 	drv->flag_roam_scan = 0;
 	drv->flag_roam_state = 0;
 	drv->flag_disconnect_state = 0;
+	drv->in_low_rssi_state = 0;
 	drv->associated = 0;
 	wpa_supplicant_event(drv->ctx, EVENT_DISASSOC, NULL);
 }
@@ -397,6 +399,8 @@ static void roaming_scan_timeout_handler(void *eloop_ctx, void *timeout_ctx)
 	struct wpa_driver_nl80211_data *drv = eloop_ctx;
 	if (drv->flag_roam_scan)
 		drv->flag_roam_scan = 0;
+	if (drv->flag_disconnect_state)
+		seamless_roaming_disconnect(drv);
 }
 
 static int
@@ -463,6 +467,7 @@ static void find_better_ap(struct wpa_driver_nl80211_data *drv, int mode)
 		}
 	}
 	if (roam_bss) {
+		drv->in_low_rssi_state = 1;
 		wpa_driver_nl80211_disassociate((void *)bss, (u8 *)wpa_s->bssid, 3);
 		roam_to_target_ap(drv, roam_bss, roam_bss->bssid);
 	} else {
@@ -477,6 +482,7 @@ static void find_better_ap(struct wpa_driver_nl80211_data *drv, int mode)
 			drv->flag_roam_scan = 0;
 			drv->flag_roam_state = 0;
 			drv->flag_disconnect_state = 0;
+			drv->in_low_rssi_state = 0;
 		}
 	}
 }
@@ -1105,8 +1111,11 @@ static void mlme_event_disconnect(struct wpa_driver_nl80211_data *drv,
 		struct wpa_supplicant *wpa_s = (struct wpa_supplicant *)(drv->ctx);
 
 		if (wpa_s->en_roaming) {
-			if (drv->flag_roaming || drv->flag_roam_state)
+			if (drv->flag_roaming || drv->flag_roam_state) {
+				if (!drv->in_low_rssi_state)
+					seamless_roaming_disconnect(drv);
 				return;
+			}
 			if (!drv->flag_disconnect_state && !drv->flag_roam_state) {
 				drv->flag_roam_state = 1;
 				drv->flag_disconnect_state = 1;
@@ -1118,6 +1127,7 @@ static void mlme_event_disconnect(struct wpa_driver_nl80211_data *drv,
 			drv->flag_roam_scan = 0;
 			drv->flag_roam_state = 0;
 			drv->flag_disconnect_state = 0;
+			drv->in_low_rssi_state = 0;
 		}
 	}
 #endif
@@ -2088,6 +2098,7 @@ static int process_event(struct nl_msg *msg, void *arg)
 			drv->flag_roaming = 0;
 			drv->flag_roam_state = 0;
 			drv->flag_disconnect_state = 0;
+			drv->in_low_rssi_state = 0;
 		}
 #endif
 		mlme_event_connect(drv, gnlh->cmd,
@@ -2730,6 +2741,7 @@ static void * wpa_driver_nl80211_init(void *ctx, const char *ifname,
 		drv->latest_rssi_val = 0;
 		wpa_s->en_roaming = 1;
 		roam_scan_res = NULL;
+		drv->in_low_rssi_state = 0;
 	}
 #endif
 #endif
