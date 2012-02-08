@@ -2532,7 +2532,7 @@ int wpa_supplicant_remove_iface(struct wpa_global *global,
 
 	wpa_dbg(wpa_s, MSG_DEBUG, "Removing interface %s", wpa_s->ifname);
 
-	property_set("wifi.wpa_supp_ready", "1");
+	property_set("wifi.wpa_supp_ready", "0");
 
 	if (global->p2p_group_formation == wpa_s)
 		global->p2p_group_formation = NULL;
