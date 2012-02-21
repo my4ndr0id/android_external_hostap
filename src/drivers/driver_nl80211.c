@@ -492,6 +492,7 @@ static int req_roaming_scan(struct wpa_driver_nl80211_data *drv)
 	struct wpa_supplicant *wpa_s = (struct wpa_supplicant *)(drv->ctx);
 
 	drv->flag_roam_scan = 1;
+	wpa_s->scan_req = 2;
 	wpa_supplicant_req_scan(wpa_s, 0, 0);
 	return 0;
 }
@@ -1112,9 +1113,28 @@ static void mlme_event_disconnect(struct wpa_driver_nl80211_data *drv,
 
 		if (wpa_s->en_roaming) {
 			if (drv->flag_roaming || drv->flag_roam_state) {
-				if (!drv->in_low_rssi_state)
+				if (!drv->in_low_rssi_state &&
+					drv->flag_roam_state) {
+					/*
+					 * We are in process of roaming So
+					 * we need immedately connect to
+					 * another AP
+					 */
+					drv->flag_disconnect_state = 1;
+					if (!drv->flag_roam_scan) {
+						eloop_register_timeout(0, 20,
+						roaming_scan_handler,
+						(void *)drv,
+						(void *)drv->roam_scan_data);
+					}
+					return;
+				} else if (drv->in_low_rssi_state &&
+							drv->flag_roaming) {
+					return;/* Already in roaming */
+				} else {
 					seamless_roaming_disconnect(drv);
-				return;
+					return;
+				}
 			}
 			if (!drv->flag_disconnect_state && !drv->flag_roam_state) {
 				drv->flag_roam_state = 1;
@@ -2050,6 +2070,12 @@ static int process_event(struct nl_msg *msg, void *arg)
 				else
 					find_better_ap(drv, NL80211_SEAMLESS_ROAM_MODE_IM);
 			}
+			drv->scan_complete_events = 1;
+			eloop_cancel_timeout(wpa_driver_nl80211_scan_timeout,
+						drv, drv->ctx);
+			if (wpa_s->scanning)
+				send_scan_event(drv, 0, tb);
+			break;
 		}
 #endif
 #endif
@@ -3134,6 +3160,13 @@ static int wpa_driver_nl80211_scan(void *priv,
 	ret = send_and_recv_msgs(drv, msg, NULL, NULL);
 	msg = NULL;
 	if (ret) {
+#ifdef SEAMLESS_ROAMING
+		if (drv->flag_roam_state) {
+			struct wpa_supplicant *wpa_s =
+					(struct wpa_supplicant *)(drv->ctx);
+			wpa_s->scan_req = 2;
+		}
+#endif
 		wpa_printf(MSG_DEBUG, "nl80211: Scan trigger failed: ret=%d "
 			   "(%s)", ret, strerror(-ret));
 #ifdef HOSTAPD
