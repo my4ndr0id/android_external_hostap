@@ -380,6 +380,8 @@ static void seamless_roaming_disconnect(struct wpa_driver_nl80211_data *drv)
 	drv->flag_disconnect_state = 0;
 	drv->in_low_rssi_state = 0;
 	drv->associated = 0;
+	wpa_printf(MSG_DEBUG, "[SeamLess] Event DISASSOC is Generated %s:%d",
+							__func__, __LINE__);
 	wpa_supplicant_event(drv->ctx, EVENT_DISASSOC, NULL);
 }
 
@@ -389,8 +391,11 @@ static void roaming_timeout_handler(void *eloop_ctx, void *timeout_ctx)
 
 	if (drv->flag_roaming) {
 		drv->flag_roaming = 0;
-		if (drv->flag_disconnect_state)
+		if (drv->flag_disconnect_state) {
+			wpa_printf(MSG_DEBUG, "[SeamLess] Roaming timeout"
+				" happened %s:%d", __func__, __LINE__);
 			seamless_roaming_disconnect(drv);
+		}
 	}
 }
 
@@ -399,8 +404,11 @@ static void roaming_scan_timeout_handler(void *eloop_ctx, void *timeout_ctx)
 	struct wpa_driver_nl80211_data *drv = eloop_ctx;
 	if (drv->flag_roam_scan)
 		drv->flag_roam_scan = 0;
-	if (drv->flag_disconnect_state)
+	if (drv->flag_disconnect_state) {
+		wpa_printf(MSG_DEBUG, "[SeamLess] Roaming Scan timeout"
+				" happened %s:%d", __func__, __LINE__);
 		seamless_roaming_disconnect(drv);
+	}
 }
 
 static int
@@ -419,6 +427,8 @@ roam_to_target_ap(struct wpa_driver_nl80211_data *drv,
 	}
 	wpa_s->reassociate = 1;
 	wpa_supplicant_connect(wpa_s, bss, ssid);
+	wpa_printf(MSG_DEBUG, "[SeamLess] Roaming  to connect to BSSID:"
+					MACSTR, MAC2STR(bss->bssid));
 	eloop_register_timeout(NL80211_SEAMLESS_ROAMING_TIMEOUT, 0,
 			roaming_timeout_handler, (void *)drv,
 			(void *)drv->roam_timeout_data);
@@ -450,8 +460,12 @@ static void find_better_ap(struct wpa_driver_nl80211_data *drv, int mode)
 		ssid = ie ? ie + 2 : (u8 *) "";
 		ssid_len = ie ? ie[1] : 0;
 		selected_bss = wpa_bss_get(wpa_s, bss->bssid, ssid, ssid_len);
-		if (os_memcmp(wpa_s->bssid, bss->bssid, ETH_ALEN) == 0)
+		if (os_memcmp(wpa_s->bssid, bss->bssid, ETH_ALEN) == 0) {
+			wpa_printf(MSG_DEBUG, "[SeamLess] This is already"
+				" connected so rejected to "MACSTR,
+				MAC2STR(bss->bssid));
 			continue;
+		}
 		switch (mode) {
 		case NL80211_SEAMLESS_ROAM_MODE_BG:
 			if (!((drv->latest_rssi_val+NL80211_SEAMLESS_RSSI_ROAMING_THRESHOLD)
@@ -468,11 +482,18 @@ static void find_better_ap(struct wpa_driver_nl80211_data *drv, int mode)
 	}
 	if (roam_bss) {
 		drv->in_low_rssi_state = 1;
-		wpa_driver_nl80211_disassociate((void *)bss, (u8 *)wpa_s->bssid, 3);
+		wpa_printf(MSG_DEBUG, "[SeamLess] We found BSSID to"
+			" connect:"MACSTR" Signal is %d",
+			MAC2STR(roam_bss->bssid), roam_bss->level);
+		wpa_driver_nl80211_disassociate((void *)bss,
+						(u8 *)wpa_s->bssid, 3);
 		roam_to_target_ap(drv, roam_bss, roam_bss->bssid);
 	} else {
-		if (drv->flag_disconnect_state)
+		if (drv->flag_disconnect_state) {
+			wpa_printf(MSG_DEBUG, "[SeamLess] Seamless Roaming is"
+					" not able to find another AP");
 			seamless_roaming_disconnect(drv);
+		}
 		else {
 			eloop_cancel_timeout(roaming_timeout_handler, (void *)drv,
 						(void *)drv->roam_timeout_data);
@@ -493,6 +514,7 @@ static int req_roaming_scan(struct wpa_driver_nl80211_data *drv)
 
 	drv->flag_roam_scan = 1;
 	wpa_s->scan_req = 2;
+	wpa_printf(MSG_DEBUG, "[SeamLess] We requested scan to connect");
 	wpa_supplicant_req_scan(wpa_s, 0, 0);
 	return 0;
 }
@@ -501,6 +523,8 @@ static void roaming_scan_handler(void *eloop_ctx, void *timeout_ctx)
 {
 	struct wpa_driver_nl80211_data *drv = eloop_ctx;
 
+	wpa_printf(MSG_DEBUG, "[SeamLess] We are in roaming_scan_handler"
+					" to register to timeout handlers");
 	if (req_roaming_scan(drv) == 0)
 		eloop_register_timeout(NL80211_SEAMLESS_ROAM_SCAN_TIMEOUT, 0,
 					roaming_scan_timeout_handler, (void *)drv,
@@ -1173,6 +1197,8 @@ static void mlme_event_disconnect(struct wpa_driver_nl80211_data *drv,
 				WPA_EVENT_DRIVER_STATE "HANGED");
 #endif
 	}
+	wpa_printf(MSG_DEBUG, "[SeamLess] Event disassoc is recevied %s:%d",
+							__func__, __LINE__);
 	wpa_supplicant_event(drv->ctx, EVENT_DISASSOC, &data);
 }
 
