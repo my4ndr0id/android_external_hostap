@@ -1927,6 +1927,20 @@ static void nl80211_del_station_event(struct wpa_driver_nl80211_data *drv,
 	wpa_printf(MSG_DEBUG, "nl80211: Delete station " MACSTR,
 		   MAC2STR(addr));
 
+#if defined(ANDROID) && defined(ANDROID_QCOM_P2P_PATCH) && !defined(HOSTAPD)
+	if (is_broadcast_ether_addr(addr)) {
+		/* driver is asking supplicant to stop, this probably means driver has
+		 * encountered errors that requires supplicant and framework to
+		 * re-initialize. As part of the framework re-initialization it will
+		 * re-start supplicant */
+		struct wpa_supplicant *wpa_s = (struct wpa_supplicant *)(drv->ctx);
+		wpa_msg((struct wpa_supplicant *)(drv->ctx), MSG_INFO,
+							"supplicant restarting");
+		wpa_supplicant_terminate_proc(wpa_s->global);
+		return;
+	}
+#endif
+
 	if (is_ap_interface(drv->nlmode) && drv->device_ap_sme) {
 		drv_event_disassoc(drv->ctx, addr);
 		return;
