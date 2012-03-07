@@ -710,6 +710,18 @@ static void wpa_config_write_global(FILE *f, struct wpa_config *config)
 	if (config->wfd_time_sync_supported)
 		fprintf(f, "wfd_time_sync_supported=%s\n",
 			config->wfd_time_sync_supported);
+	if (config->primarysink_audio_notsupported)
+		fprintf(f, "wfd_primarysink_audio_notsupported=%s\n",
+			config->primarysink_audio_notsupported);
+	if (config->source_audio_only_supported)
+		fprintf(f, "wfd_source_audio_only_supported=%s\n",
+			config->source_audio_only_supported);
+	if (config->tdls_persistent_group_intended)
+		fprintf(f, "wfd_tdls_persistent_group_intended=%s\n",
+			config->tdls_persistent_group_intended);
+	if (config->tdls_persistent_group_reinvoke)
+		fprintf(f, "wfd_tdls_persistent_group_reinvoke=%s\n",
+			config->tdls_persistent_group_reinvoke);
 	fprintf(f, "wfd_session_mgmt_ctrl_port=%u\n",
 			config->wfd_session_mgmt_ctrl_port);
 	fprintf(f, "wfd_device_max_throughput=%u\n",

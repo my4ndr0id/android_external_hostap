@@ -170,6 +170,38 @@ int wpas_wfd_parse_config(struct wpa_config *conf, struct wfd_config *wfd)
 		return -1;
 	}
 
+	if (conf->primarysink_audio_notsupported &&
+		wpas_wfd_y_n_str2bin(conf->primarysink_audio_notsupported,
+				&wfd->primarysink_audio_notsupported)) {
+		wpa_printf(MSG_ERROR,
+			"WFD: Invalid primarysink_audio_notsupported value");
+		return -1;
+	}
+
+	if (conf->source_audio_only_supported &&
+		wpas_wfd_y_n_str2bin(conf->source_audio_only_supported,
+				&wfd->source_audio_only_supported)) {
+		wpa_printf(MSG_ERROR,
+			"WFD: Invalid source_audio_only_supported value");
+		return -1;
+	}
+
+	if (conf->tdls_persistent_group_intended &&
+		wpas_wfd_y_n_str2bin(conf->tdls_persistent_group_intended,
+				&wfd->tdls_persistent_group_intended)) {
+		wpa_printf(MSG_ERROR,
+			"WFD: Invalid tdls_persistent_group_intended value");
+		return -1;
+	}
+
+	if (conf->tdls_persistent_group_reinvoke &&
+		wpas_wfd_y_n_str2bin(conf->tdls_persistent_group_reinvoke,
+				&wfd->tdls_persistent_group_reinvoke)) {
+		wpa_printf(MSG_ERROR,
+			"WFD: Invalid tdls_persistent_group_reinvoke value");
+		return -1;
+	}
+
 	wfd->session_mgmt_ctrl_port = conf->wfd_session_mgmt_ctrl_port;
 	wfd->device_max_throughput = conf->wfd_device_max_throughput;
 
@@ -206,6 +238,10 @@ int wpas_wfd_init(struct wpa_global *global, struct wpa_supplicant *wpa_s)
 	wfd.time_sync_supported = WFD_DEFAULT_TIME_SYNC_SUPPORTED;
 	wfd.session_mgmt_ctrl_port = WFD_DEFAULT_SESSION_MGMT_CTRL_PORT;
 	wfd.device_max_throughput = WFD_DEFAULT_MAX_THROUGHPUT;
+	wfd.primarysink_audio_notsupported = WFD_DEFAULT_PRIMARYSINK_AUDIO_NOTSUPPORTED;
+	wfd.source_audio_only_supported = WFD_DEFAULT_SOURCE_AUDIO_ONLY_SUPPORTED;
+	wfd.tdls_persistent_group_intended = WFD_DEFAULT_TDLS_PERSISTENT_GROUP_INTENTED;
+	wfd.tdls_persistent_group_reinvoke = WFD_DEFAULT_TDLS_PERSISTENT_GROUP_REINVOKE;
 
 	if (wpas_wfd_parse_config(wpa_s->conf, &wfd))
 		return -1;

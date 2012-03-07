@@ -1787,6 +1787,10 @@ void wpa_config_free(struct wpa_config *config)
 	os_free(config->wfd_preferred_connectivity);
 	os_free(config->wfd_content_protection_supported);
 	os_free(config->wfd_time_sync_supported);
+	os_free(config->primarysink_audio_notsupported);
+	os_free(config->source_audio_only_supported);
+	os_free(config->tdls_persistent_group_intended);
+	os_free(config->tdls_persistent_group_reinvoke);
 #endif
 	os_free(config);
 }
@@ -2568,6 +2572,10 @@ static const struct global_parse_data global_fields[] = {
 	{ STR_RANGE(wfd_preferred_connectivity, 3, 4), 0 },
 	{ STR_RANGE(wfd_content_protection_supported, 1, 1), 0 },
 	{ STR_RANGE(wfd_time_sync_supported, 1, 1), 0 },
+	{ STR_RANGE(primarysink_audio_notsupported, 1, 1), 0 },
+	{ STR_RANGE(source_audio_only_supported, 1, 1), 0 },
+	{ STR_RANGE(tdls_persistent_group_intended, 1, 1), 0 },
+	{ STR_RANGE(tdls_persistent_group_reinvoke, 1, 1), 0 },
 	{ INT(wfd_session_mgmt_ctrl_port), 0 },
 	{ INT(wfd_device_max_throughput), 0 }
 #endif

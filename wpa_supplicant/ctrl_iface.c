@@ -3521,6 +3521,50 @@ static int wfd_ctrl_set(struct wpa_supplicant *wpa_s, char *cmd)
 		return 0;
 	}
 
+	if (os_strcmp(cmd, "primarysink_audio_notsupported") == 0) {
+		if (wpas_wfd_y_n_str2bin(param, &cfg->primarysink_audio_notsupported)) {
+			wpa_printf(MSG_ERROR, "CTRL_IFACE: Invalid WFD_SET "
+					   "primarysink_audio_notsupported value");
+			return -1;
+		}
+		os_free(wpa_s->conf->primarysink_audio_notsupported);
+		wpa_s->conf->primarysink_audio_notsupported = os_strdup(param);
+		return 0;
+	}
+
+	if (os_strcmp(cmd, "source_audio_only_supported") == 0) {
+		if (wpas_wfd_y_n_str2bin(param, &cfg->source_audio_only_supported)) {
+			wpa_printf(MSG_ERROR, "CTRL_IFACE: Invalid WFD_SET "
+					   "source_audio_only_supported value");
+			return -1;
+		}
+		os_free(wpa_s->conf->source_audio_only_supported);
+		wpa_s->conf->source_audio_only_supported = os_strdup(param);
+		return 0;
+	}
+
+	if (os_strcmp(cmd, "tdls_persistent_group_intended") == 0) {
+		if (wpas_wfd_y_n_str2bin(param, &cfg->tdls_persistent_group_intended)) {
+			wpa_printf(MSG_ERROR, "CTRL_IFACE: Invalid WFD_SET "
+					   "tdls_persistent_group_intended value");
+			return -1;
+		}
+		os_free(wpa_s->conf->tdls_persistent_group_intended);
+		wpa_s->conf->tdls_persistent_group_intended = os_strdup(param);
+		return 0;
+	}
+
+	if (os_strcmp(cmd, "tdls_persistent_group_reinvoke") == 0) {
+		if (wpas_wfd_y_n_str2bin(param, &cfg->tdls_persistent_group_reinvoke)) {
+			wpa_printf(MSG_ERROR, "CTRL_IFACE: Invalid WFD_SET "
+					   "tdls_persistent_group_reinvoke value");
+			return -1;
+		}
+		os_free(wpa_s->conf->tdls_persistent_group_reinvoke);
+		wpa_s->conf->tdls_persistent_group_reinvoke = os_strdup(param);
+		return 0;
+	}
+
 	if (os_strcmp(cmd, "session_mgmt_ctrl_port") == 0) {
 		cfg->session_mgmt_ctrl_port = atoi(param);
 		wpa_s->conf->wfd_session_mgmt_ctrl_port = atoi(param);
