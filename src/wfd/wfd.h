@@ -176,6 +176,30 @@ struct wfd_config {
 	int time_sync_supported;
 
 	/**
+	 * primarysink_audio_notsupported - Primary sink does not support
+	 * audio
+	 */
+	int primarysink_audio_notsupported;
+
+	/**
+	 * source_audio_only_supported - Source supports audio only
+	 * session
+	 */
+	int source_audio_only_supported;
+
+	/**
+	 * tdls_persistent_group_intended - tdls persistent group
+	 * intended
+	 */
+	int tdls_persistent_group_intended;
+
+	/**
+	 * tdls_persistent_group_reinvoke - tdls persistent group
+	 * reinvoke
+	 */
+	int tdls_persistent_group_reinvoke;
+
+	/**
 	 * session_mgmt_ctrl_port - TCP port at which the device listens
 	 * for RTSP messages
 	 */

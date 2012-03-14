@@ -104,6 +104,14 @@ void wfd_buf_add_device_info(struct wpabuf *buf, struct wfd_data *wfd)
 		device_info |= WFD_DEVICE_INFO_CONTENT_PROTECTION_SUPPORTED;
 	if (wfd->cfg->time_sync_supported)
 		device_info |= WFD_DEVICE_INFO_TIME_SYNC_SUPPORTED;
+	if (wfd->cfg->primarysink_audio_notsupported)
+		device_info |= WFD_DEVICE_INFO_AUDIO_UNSUPPORTED_AT_PRIMARY_SINK;
+	if (wfd->cfg->source_audio_only_supported)
+		device_info |= WFD_DEVICE_INFO_AUDIO_ONLY_SUPPORT_AT_SOURCE;
+	if (wfd->cfg->tdls_persistent_group_intended)
+		device_info |= WFD_DEVICE_INFO_TDLS_PERSISTENT_GROUP_INTENDED;
+	if (wfd->cfg->tdls_persistent_group_reinvoke)
+		device_info |= WFD_DEVICE_INFO_TDLS_PERSISTENT_GROUP_REINVOKE;
 
 	wpabuf_put_be16(buf, device_info);
 

@@ -498,6 +498,10 @@ struct wpa_config {
 	char *wfd_preferred_connectivity;
 	char *wfd_content_protection_supported;
 	char *wfd_time_sync_supported;
+	char *primarysink_audio_notsupported;
+	char *source_audio_only_supported;
+	char *tdls_persistent_group_intended;
+	char *tdls_persistent_group_reinvoke;
 	int wfd_session_mgmt_ctrl_port;
 	int wfd_device_max_throughput;
 #endif
