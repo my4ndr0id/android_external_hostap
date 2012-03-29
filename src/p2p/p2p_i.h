@@ -80,6 +80,14 @@ struct p2p_device {
 	 */
 	u16 req_config_methods;
 
+	/**
+	 * wps_prov_info - Stored provisioning WPS config method
+	 *
+	 * This is used to store pending WPS config method between Provisioning
+	 * Discovery and connection to a running group.
+	 */
+	u16 wps_prov_info;
+
 #define P2P_DEV_PROBE_REQ_ONLY BIT(0)
 #define P2P_DEV_REPORTED BIT(1)
 #define P2P_DEV_NOT_YET_READY BIT(2)
@@ -677,5 +685,6 @@ void p2p_build_ssid(struct p2p_data *p2p, u8 *ssid, size_t *ssid_len);
 int p2p_send_action(struct p2p_data *p2p, unsigned int freq, const u8 *dst,
 		    const u8 *src, const u8 *bssid, const u8 *buf,
 		    size_t len, unsigned int wait_time);
+void p2p_stop_listen_for_freq(struct p2p_data *p2p, int freq);
 
 #endif /* P2P_I_H */

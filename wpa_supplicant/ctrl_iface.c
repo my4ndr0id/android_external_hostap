@@ -2603,7 +2603,9 @@ static int p2p_ctrl_prov_disc(struct wpa_supplicant *wpa_s, char *cmd)
 		return -1;
 	pos++;
 
-	return wpas_p2p_prov_disc(wpa_s, addr, pos);
+	return wpas_p2p_prov_disc(wpa_s, addr, pos,
+			os_strstr(pos, "join") != NULL);
+
 }
 
 
@@ -2614,9 +2616,9 @@ static int p2p_get_passphrase(struct wpa_supplicant *wpa_s, char *buf,
 
 #ifdef ANDROID_BRCM_P2P_PATCH
 	struct wpa_supplicant *ifs = NULL;
-	
+
 	for (ifs = wpa_s->global->ifaces; ifs; ifs = ifs->next) {
-		if((ifs->ap_iface) && 
+		if ((ifs->ap_iface) &&
 			(ifs->p2p_group_interface == P2P_GROUP_INTERFACE_GO)) {
 			ssid = ifs->current_ssid;
 		}

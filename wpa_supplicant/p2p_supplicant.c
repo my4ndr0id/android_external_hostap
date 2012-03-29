@@ -62,6 +62,8 @@ static int wpas_p2p_join_start(struct wpa_supplicant *wpa_s);
 static void wpas_p2p_join_scan(void *eloop_ctx, void *timeout_ctx);
 static int wpas_p2p_join(struct wpa_supplicant *wpa_s, const u8 *iface_addr,
 			 const u8 *dev_addr, enum p2p_wps_method wps_method);
+static void wpas_p2p_pd_before_join_timeout(void *eloop_ctx,
+					    void *timeout_ctx);
 static int wpas_p2p_create_iface(struct wpa_supplicant *wpa_s);
 static void wpas_p2p_cross_connect_setup(struct wpa_supplicant *wpa_s);
 static void wpas_p2p_group_idle_timeout(void *eloop_ctx, void *timeout_ctx);
@@ -598,12 +600,14 @@ static void wpas_p2p_send_action_tx_status(struct wpa_supplicant *wpa_s,
 
 	p2p_send_action_cb(wpa_s->global->p2p, freq, dst, src, bssid, res);
 
-	if (wpa_s->pending_pd_before_join &&
+	if (result != OFFCHANNEL_SEND_ACTION_SUCCESS &&
+	    wpa_s->pending_pd_before_join &&
 	    (os_memcmp(dst, wpa_s->pending_join_dev_addr, ETH_ALEN) == 0 ||
 	     os_memcmp(dst, wpa_s->pending_join_iface_addr, ETH_ALEN) == 0)) {
 		wpa_s->pending_pd_before_join = 0;
 		wpa_printf(MSG_DEBUG, "P2P: Starting pending "
-			   "join-existing-group operation");
+			   "join-existing-group operation (no ACK for PD "
+			   "Req)");
 		wpas_p2p_join_start(wpa_s);
 	}
 }
@@ -1752,6 +1756,16 @@ void wpas_prov_disc_resp(void *ctx, const u8 *peer, u16 config_methods)
 	struct wpa_supplicant *wpa_s = ctx;
 	unsigned int generated_pin = 0;
 
+	if (wpa_s->pending_pd_before_join &&
+	    (os_memcmp(peer, wpa_s->pending_join_dev_addr, ETH_ALEN) == 0 ||
+	     os_memcmp(peer, wpa_s->pending_join_iface_addr, ETH_ALEN) == 0)) {
+		wpa_s->pending_pd_before_join = 0;
+		wpa_printf(MSG_DEBUG, "P2P: Starting pending "
+			   "join-existing-group operation");
+		wpas_p2p_join_start(wpa_s);
+		return;
+	}
+
 	if (config_methods & WPS_CONFIG_DISPLAY)
 		wpas_prov_disc_local_keypad(wpa_s, peer, "");
 	else if (config_methods & WPS_CONFIG_KEYPAD) {
@@ -1764,17 +1778,7 @@ void wpas_prov_disc_resp(void *ctx, const u8 *peer, u16 config_methods)
 	wpas_notify_p2p_provision_discovery(wpa_s, peer, 0 /* response */,
 					    P2P_PROV_DISC_SUCCESS,
 					    config_methods, generated_pin);
-
-	if (wpa_s->pending_pd_before_join &&
-	    (os_memcmp(peer, wpa_s->pending_join_dev_addr, ETH_ALEN) == 0 ||
-	     os_memcmp(peer, wpa_s->pending_join_iface_addr, ETH_ALEN) == 0)) {
-		wpa_s->pending_pd_before_join = 0;
-		wpa_printf(MSG_DEBUG, "P2P: Starting pending "
-			   "join-existing-group operation");
-		wpas_p2p_join_start(wpa_s);
-	}
 }
-
 
 static void wpas_prov_disc_fail(void *ctx, const u8 *peer,
 				enum p2p_prov_disc_status status)
@@ -1782,7 +1786,7 @@ static void wpas_prov_disc_fail(void *ctx, const u8 *peer,
 	struct wpa_supplicant *wpa_s = ctx;
 
 	wpas_notify_p2p_provision_discovery(wpa_s, peer, 0 /* response */,
-					    status, 0, 0);
+					status, 0, 0);
 }
 
 
@@ -2354,10 +2358,19 @@ void wpas_p2p_deinit(struct wpa_supplicant *wpa_s)
 {
 	if (wpa_s->driver && wpa_s->drv_priv)
 		wpa_drv_probe_req_report(wpa_s, 0);
+
+	if (wpa_s->go_params) {
+		/* Clear any stored provisioning info */
+		p2p_clear_provisioning_info(
+			wpa_s->global->p2p,
+			wpa_s->go_params->peer_device_addr);
+	}
+
 	os_free(wpa_s->go_params);
 	wpa_s->go_params = NULL;
 	eloop_cancel_timeout(wpas_p2p_group_formation_timeout, wpa_s, NULL);
 	eloop_cancel_timeout(wpas_p2p_join_scan, wpa_s, NULL);
+	eloop_cancel_timeout(wpas_p2p_pd_before_join_timeout, wpa_s, NULL);
 	wpa_s->p2p_long_listen = 0;
 	eloop_cancel_timeout(wpas_p2p_long_listen_timeout, wpa_s, NULL);
 	eloop_cancel_timeout(wpas_p2p_group_idle_timeout, wpa_s, NULL);
@@ -2492,6 +2505,21 @@ static void wpas_p2p_check_join_scan_limit(struct wpa_supplicant *wpa_s)
 }
 
 
+static void wpas_p2p_pd_before_join_timeout(void *eloop_ctx, void *timeout_ctx)
+{
+	struct wpa_supplicant *wpa_s = eloop_ctx;
+	if (!wpa_s->pending_pd_before_join)
+		return;
+	/*
+	 * Provision Discovery Response may have been lost - try to connect
+	 * anyway since we do not need any information from this PD.
+	 */
+	wpa_printf(MSG_DEBUG, "P2P: PD timeout for join-existing-group - "
+		   "try to connect anyway");
+	wpas_p2p_join_start(wpa_s);
+}
+
+
 static void wpas_p2p_scan_res_join(struct wpa_supplicant *wpa_s,
 				   struct wpa_scan_results *scan_res)
 {
@@ -2563,6 +2591,21 @@ static void wpas_p2p_scan_res_join(struct wpa_supplicant *wpa_s,
 			break;
 		}
 
+		if ((p2p_get_provisioning_info(wpa_s->global->p2p,
+					       wpa_s->pending_join_dev_addr) ==
+		     method)) {
+			/*
+			 * We have already performed provision discovery for
+			 * joining the group. Proceed directly to join
+			 * operation without duplicated provision discovery. */
+			wpa_printf(MSG_DEBUG, "P2P: Provisioning discovery "
+				   "with " MACSTR " already done - proceed to "
+				   "join",
+				   MAC2STR(wpa_s->pending_join_dev_addr));
+			wpa_s->pending_pd_before_join = 0;
+			goto start;
+		}
+
 		if (p2p_prov_disc_req(wpa_s->global->p2p,
 				      wpa_s->pending_join_dev_addr, method, 1)
 		    < 0) {
@@ -2575,8 +2618,15 @@ static void wpas_p2p_scan_res_join(struct wpa_supplicant *wpa_s,
 
 		/*
 		 * Actual join operation will be started from the Action frame
-		 * TX status callback.
+		 * TX status callback (if no ACK is received) or when the
+		 * Provision Discovery Response is received. Use a short
+		 * timeout as a backup mechanism should the Provision Discovery
+		 * Response be lost for any reason.
 		 */
+		eloop_cancel_timeout(wpas_p2p_pd_before_join_timeout, wpa_s,
+				     NULL);
+		eloop_register_timeout(2, 0, wpas_p2p_pd_before_join_timeout,
+				       wpa_s, NULL);
 		return;
 	}
 
@@ -2675,6 +2725,7 @@ static int wpas_p2p_join_start(struct wpa_supplicant *wpa_s)
 	struct wpa_supplicant *group;
 	struct p2p_go_neg_results res;
 
+	eloop_cancel_timeout(wpas_p2p_pd_before_join_timeout, wpa_s, NULL);
 	group = wpas_p2p_get_group_iface(wpa_s, 0, 0);
 	if (group == NULL)
 		return -1;
@@ -3310,10 +3361,21 @@ struct p2p_group * wpas_p2p_group_init(struct wpa_supplicant *wpa_s,
 void wpas_p2p_wps_success(struct wpa_supplicant *wpa_s, const u8 *peer_addr,
 			  int registrar)
 {
+	struct wpa_ssid *ssid = wpa_s->current_ssid;
+
 	if (!wpa_s->p2p_in_provisioning) {
 		wpa_printf(MSG_DEBUG, "P2P: Ignore WPS success event - P2P "
 			   "provisioning not in progress");
 		return;
+	}
+
+	if (ssid && ssid->mode == WPAS_MODE_INFRA) {
+		u8 go_dev_addr[ETH_ALEN];
+		os_memcpy(go_dev_addr, wpa_s->bssid, ETH_ALEN);
+		wpas_p2p_persistent_group(wpa_s, go_dev_addr, ssid->ssid,
+					  ssid->ssid_len);
+		/* Clear any stored provisioning info */
+		p2p_clear_provisioning_info(wpa_s->global->p2p, go_dev_addr);
 	}
 
 	eloop_cancel_timeout(wpas_p2p_group_formation_timeout, wpa_s->parent,
@@ -3334,28 +3396,38 @@ void wpas_p2p_wps_failed(struct wpa_supplicant *wpa_s,
 			   "provisioning not in progress");
 		return;
 	}
+
+	if (wpa_s->go_params) {
+		p2p_clear_provisioning_info(
+			wpa_s->global->p2p,
+			wpa_s->go_params->peer_device_addr);
+	}
+
 	wpas_notify_p2p_wps_failed(wpa_s, fail);
 }
 
 
 int wpas_p2p_prov_disc(struct wpa_supplicant *wpa_s, const u8 *peer_addr,
-		       const char *config_method)
+			 const char *config_method, int join)
 {
 	u16 config_methods;
 
-	if (os_strcmp(config_method, "display") == 0)
+	if (os_strncmp(config_method, "display", 7) == 0)
 		config_methods = WPS_CONFIG_DISPLAY;
-	else if (os_strcmp(config_method, "keypad") == 0)
+	else if (os_strncmp(config_method, "keypad", 6) == 0)
 		config_methods = WPS_CONFIG_KEYPAD;
-	else if (os_strcmp(config_method, "pbc") == 0 ||
-		 os_strcmp(config_method, "pushbutton") == 0)
+	else if (os_strncmp(config_method, "pbc", 3) == 0 ||
+		os_strncmp(config_method, "pushbutton", 10) == 0)
 		config_methods = WPS_CONFIG_PUSHBUTTON;
-	else
+	else {
+		wpa_printf(MSG_DEBUG, "P2P: Unknown config method");
 		return -1;
+	}
 
 	if (wpa_s->drv_flags & WPA_DRIVER_FLAGS_P2P_MGMT) {
 		return wpa_drv_p2p_prov_disc_req(wpa_s, peer_addr,
-						 config_methods);
+						config_methods, join);
+
 	}
 
 	if (wpa_s->global->p2p == NULL || wpa_s->global->p2p_disabled)

@@ -142,6 +142,34 @@ static const char * p2p_state_txt(int state)
 }
 
 
+u16 p2p_get_provisioning_info(struct p2p_data *p2p, const u8 *addr)
+{
+	struct p2p_device *dev = NULL;
+
+	if (!addr || !p2p)
+		return 0;
+
+	dev = p2p_get_device(p2p, addr);
+	if (dev)
+		return dev->wps_prov_info;
+	else
+		return 0;
+}
+
+
+void p2p_clear_provisioning_info(struct p2p_data *p2p, const u8 *addr)
+{
+	struct p2p_device *dev = NULL;
+
+	if (!addr || !p2p)
+		return;
+
+	dev = p2p_get_device(p2p, addr);
+	if (dev)
+		dev->wps_prov_info = 0;
+}
+
+
 void p2p_set_state(struct p2p_data *p2p, int new_state)
 {
 	wpa_msg(p2p->cfg->msg_ctx, MSG_DEBUG, "P2P: State %s -> %s",
@@ -997,10 +1025,20 @@ void p2p_stop_find_for_freq(struct p2p_data *p2p, int freq)
 	p2p->go_neg_peer = NULL;
 	p2p->sd_peer = NULL;
 	p2p->invite_peer = NULL;
+	p2p_stop_listen_for_freq(p2p, freq);
+}
+
+
+void p2p_stop_listen_for_freq(struct p2p_data *p2p, int freq)
+{
 	if (freq > 0 && p2p->drv_in_listen == freq && p2p->in_listen) {
 		wpa_msg(p2p->cfg->msg_ctx, MSG_DEBUG, "P2P: Skip stop_listen "
 			"since we are on correct channel for response");
 		return;
+	}
+	if (p2p->in_listen) {
+		p2p->in_listen = 0;
+		p2p_clear_timeout(p2p);
 	}
 	if (p2p->drv_in_listen) {
 		/*
