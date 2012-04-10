@@ -8179,7 +8179,7 @@ nla_put_failure:
 static int nl80211_set_p2p_powersave(void *priv, int legacy_ps, int opp_ps,
 				     int ctwindow)
 {
-#ifdef ANDROID_BRCM_P2P_PATCH
+#if (defined(ANDROID_BRCM_P2P_PATCH) || defined(ANDROID_QCOM_P2P_PATCH))
 	char buf[MAX_DRV_CMD_SIZE];
 
 	memset(buf, 0, sizeof(buf));
@@ -8522,12 +8522,42 @@ static int wpa_driver_nl80211_driver_cmd(void *priv, char *cmd, char *buf,
 		if (!ret && (state != -1))
 			ret = os_snprintf(buf, buf_len, "POWERMODE = %d\n",
 					  state);
+	} else {
+		/* Use private command */
+		os_memcpy(buf, cmd, strlen(cmd) + 1);
+		memset(&ifr, 0, sizeof(ifr));
+		memset(&priv_cmd, 0, sizeof(priv_cmd));
+		os_strncpy(ifr.ifr_name, bss->ifname, IFNAMSIZ);
+
+		wpa_printf(MSG_DEBUG, "%s: private command: %s ", __func__, buf);
+		priv_cmd.buf = buf;
+		priv_cmd.used_len = buf_len;
+		priv_cmd.total_len = buf_len;
+		ifr.ifr_data = &priv_cmd;
+
+		if ((ret = ioctl(drv->global->ioctl_sock, SIOCDEVPRIVATE + 1, &ifr)) < 0) {
+			wpa_printf(MSG_DEBUG, "%s: failed to issue private commands\n", __func__);
+		} else {
+			ret = 0;
+			if (os_strncasecmp(cmd, "SETBAND", 7) == 0) {
+				wpa_printf(MSG_DEBUG, "%s: %s ", __func__, cmd);
+				ret = strlen(buf);
+			} else if (os_strcasecmp(cmd, "P2P_DEV_ADDR") == 0) {
+				wpa_printf(MSG_DEBUG, "%s: P2P: Device address ("MACSTR")",
+						__func__, MAC2STR(buf));
+				ret = strlen(buf);
+			} else if (os_strcasecmp(cmd, "P2P_SET_PS") == 0) {
+				wpa_printf(MSG_DEBUG, "%s: P2P: %s ", __func__, buf);
+				ret = strlen(buf);
+			} else if (os_strcasecmp(cmd, "P2P_SET_NOA") == 0) {
+				wpa_printf(MSG_DEBUG, "%s: P2P: %s ", __func__, buf);
+				ret = strlen(buf);
+			}
+		}
 	}
 
 	return ret;
 }
-
-#ifdef ANDROID_BRCM_P2P_PATCH
 
 static int wpa_driver_set_p2p_noa(void *priv, u8 count, int start,
 				  int duration)
@@ -8541,6 +8571,7 @@ static int wpa_driver_set_p2p_noa(void *priv, u8 count, int start,
 	return wpa_driver_nl80211_driver_cmd(priv, buf, buf, strlen(buf) + 1);
 }
 
+#ifdef ANDROID_BRCM_P2P_PATCH
 
 static int wpa_driver_get_p2p_noa(void *priv, u8 *buf, size_t len)
 {
@@ -8686,13 +8717,13 @@ const struct wpa_driver_ops wpa_driver_nl80211_ops = {
 	.set_rekey_info = nl80211_set_rekey_info,
 	.poll_client = nl80211_poll_client,
 	.set_p2p_powersave = nl80211_set_p2p_powersave,
+	.set_noa = wpa_driver_set_p2p_noa,
 #ifdef CONFIG_TDLS
 	.send_tdls_mgmt = nl80211_send_tdls_mgmt,
 	.tdls_oper = nl80211_tdls_oper,
 #endif /* CONFIG_TDLS */
 #ifdef ANDROID_BRCM_P2P_PATCH
 	.get_noa = wpa_driver_get_p2p_noa,
-	.set_noa = wpa_driver_set_p2p_noa,
 	.set_ap_wps_ie = wpa_driver_set_ap_wps_p2p_ie,
 #endif /* ANDROID_BRCM_P2P_PATCH */
 #ifdef ANDROID
