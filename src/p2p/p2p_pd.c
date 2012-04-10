@@ -68,12 +68,12 @@ static struct wpabuf * p2p_build_prov_disc_req(struct p2p_data *p2p,
 	}
 	p2p_buf_update_ie_hdr(buf, len);
 
+	/* WPS IE with Config Methods attribute */
+	p2p_build_wps_ie_config_methods(buf, config_methods);
+
 #ifdef CONFIG_WFD
 	wfd_add_wfd_ie(p2p->cfg->cb_ctx, p2p->wfd, buf);
 #endif
-
-	/* WPS IE with Config Methods attribute */
-	p2p_build_wps_ie_config_methods(buf, config_methods);
 
 	return buf;
 }
@@ -93,6 +93,10 @@ static struct wpabuf * p2p_build_prov_disc_resp(struct p2p_data *p2p,
 
 	/* WPS IE with Config Methods attribute */
 	p2p_build_wps_ie_config_methods(buf, config_methods);
+
+#ifdef CONFIG_WFD
+	wfd_add_wfd_ie(p2p->cfg->cb_ctx, p2p->wfd, buf);
+#endif
 
 	return buf;
 }
