@@ -124,7 +124,7 @@ void p2p_process_prov_disc_req(struct p2p_data *p2p, const u8 *sa,
 		wpa_msg(p2p->cfg->msg_ctx, MSG_DEBUG,
 			"P2P: Provision Discovery Request from "
 			"unknown peer " MACSTR, MAC2STR(sa));
-		if (p2p_add_device(p2p, sa, rx_freq, 0, data + 1, len - 1)) {
+		if (p2p_add_device(p2p, sa, rx_freq, 0, data + 1, len - 1, 0)) {
 			wpa_msg(p2p->cfg->msg_ctx, MSG_DEBUG,
 			        "P2P: Provision Discovery Request add device "
 				"failed " MACSTR, MAC2STR(sa));
@@ -284,6 +284,15 @@ void p2p_process_prov_disc_resp(struct p2p_data *p2p, const u8 *sa,
 out:
 	dev->req_config_methods = 0;
 	p2p->cfg->send_action_done(p2p->cfg->cb_ctx);
+	if (dev->flags & P2P_DEV_PD_BEFORE_GO_NEG) {
+		wpa_msg(p2p->cfg->msg_ctx, MSG_DEBUG,
+			"P2P: Start GO Neg after the PD-before-GO-Neg "
+			"workaround with " MACSTR,
+			MAC2STR(dev->info.p2p_device_addr));
+		dev->flags &= ~P2P_DEV_PD_BEFORE_GO_NEG;
+		p2p_connect_send(p2p, dev);
+		return;
+	}
 	if (p2p->cfg->prov_disc_resp)
 		p2p->cfg->prov_disc_resp(p2p->cfg->cb_ctx, sa,
 					 report_config_methods);
@@ -291,7 +300,7 @@ out:
 
 
 int p2p_send_prov_disc_req(struct p2p_data *p2p, struct p2p_device *dev,
-			   int join)
+				int join, int force_freq)
 {
 	struct wpabuf *req;
 	int freq;
@@ -307,7 +316,11 @@ int p2p_send_prov_disc_req(struct p2p_data *p2p, struct p2p_device *dev,
 		freq = dev->listen_freq > 0 ? dev->listen_freq : dev->oper_freq;
 	}
 #else
-	freq = dev->listen_freq > 0 ? dev->listen_freq : dev->oper_freq;
+	if (force_freq > 0)
+		freq = force_freq;
+	else
+		freq = dev->listen_freq > 0 ? dev->listen_freq :
+					dev->oper_freq;
 #endif
 
 	if (freq <= 0) {
@@ -359,7 +372,7 @@ int p2p_send_prov_disc_req(struct p2p_data *p2p, struct p2p_device *dev,
 
 
 int p2p_prov_disc_req(struct p2p_data *p2p, const u8 *peer_addr,
-		      u16 config_methods, int join)
+			u16 config_methods, int join, int force_freq)
 {
 	struct p2p_device *dev;
 
@@ -407,7 +420,7 @@ int p2p_prov_disc_req(struct p2p_data *p2p, const u8 *peer_addr,
 	if (p2p->user_initiated_pd && p2p->state == P2P_IDLE)
 		p2p->pd_retries = MAX_PROV_DISC_REQ_RETRIES;
 
-	return p2p_send_prov_disc_req(p2p, dev, join);
+	return p2p_send_prov_disc_req(p2p, dev, join, force_freq);
 }
 
 

@@ -872,12 +872,16 @@ int p2p_listen(struct p2p_data *p2p, unsigned int timeout);
  * @persistent_group: Whether to create a persistent group (0 = no, 1 =
  * persistent group without persistent reconnect, 2 = persistent group with
  * persistent reconnect)
+ * @pd_before_go_neg: Whether to send Provision Discovery prior to GO
+ *	Negotiation as an interoperability workaround when initiating group
+ *	formation
  * Returns: 0 on success, -1 on failure
  */
 int p2p_connect(struct p2p_data *p2p, const u8 *peer_addr,
 		enum p2p_wps_method wps_method,
 		int go_intent, const u8 *own_interface_addr,
-		unsigned int force_freq, int persistent_group);
+		unsigned int force_freq, int persistent_group,
+		int pd_before_go_neg);
 
 /**
  * p2p_authorize - Authorize P2P group formation (GO negotiation)
@@ -914,6 +918,7 @@ int p2p_reject(struct p2p_data *p2p, const u8 *peer_addr);
  * @peer_addr: MAC address of the peer P2P client
  * @config_methods: WPS Config Methods value (only one bit set)
  * @join: Whether this is used by a client joining an active group
+ * @force_freq: Forced TX frequency for the frame (mainly for the join case)
  * Returns: 0 on success, -1 on failure
  *
  * This function can be used to request a discovered P2P peer to display a PIN
@@ -925,7 +930,7 @@ int p2p_reject(struct p2p_data *p2p, const u8 *peer_addr);
  * indicated with the p2p_config::prov_disc_resp() callback.
  */
 int p2p_prov_disc_req(struct p2p_data *p2p, const u8 *peer_addr,
-		      u16 config_methods, int join);
+			u16 config_methods, int join, int force_freq);
 
 /**
  * p2p_sd_request - Schedule a service discovery query
@@ -1489,9 +1494,6 @@ void p2p_set_peer_filter(struct p2p_data *p2p, const u8 *addr);
 void p2p_set_cross_connect(struct p2p_data *p2p, int enabled);
 
 int p2p_get_oper_freq(struct p2p_data *p2p, const u8 *iface_addr);
-
-int p2p_add_device(struct p2p_data *p2p, const u8 *addr, int freq, int level,
-		   const u8 *ies, size_t ies_len);
 
 /**
  * p2p_set_intra_bss_dist - Set intra BSS distribution
