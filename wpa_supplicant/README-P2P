@@ -101,7 +101,7 @@ Flush P2P peer table and state.
 
 Group Formation
 
-p2p_prov_disc <peer device address> <display|keypad|pbc>
+p2p_prov_disc <peer device address> <display|keypad|pbc> [join|auto]
 
 Send P2P provision discovery request to the specified peer. The
 parameters for this command are the P2P device address of the peer and

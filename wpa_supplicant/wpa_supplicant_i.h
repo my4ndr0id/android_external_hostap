@@ -455,6 +455,11 @@ struct wpa_supplicant {
 	int p2p_join_scan_count;
 	int force_long_sd;
 
+	u16 pending_pd_config_methods;
+	enum {
+		NORMAL_PD, AUTO_PD_GO_NEG, AUTO_PD_JOIN
+	} pending_pd_use;
+
 	/*
 	 * Whether cross connection is disallowed by the AP to which this
 	 * interface is associated (only valid if there is an association).
@@ -485,6 +490,7 @@ struct wpa_supplicant {
 
 	unsigned int p2p_cb_on_scan_complete:1;
 	unsigned int p2p_auto_join:1;
+	unsigned int p2p_auto_pd:1;
 	unsigned int p2p_persistent_group:1;
 	unsigned int p2p_pd_before_go_neg:1;
 	int p2p_go_intent;
