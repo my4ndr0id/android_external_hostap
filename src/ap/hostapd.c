@@ -263,6 +263,11 @@ static void hostapd_free_hapd_data(struct hostapd_data *hapd)
 	hapd->p2p_probe_resp_ie = NULL;
 #endif /* CONFIG_P2P */
 
+#ifdef CONFIG_WFD
+	wpabuf_free(hapd->wfd_assoc_resp_ie);
+	hapd->wfd_assoc_resp_ie = NULL;
+#endif /* CONFIG_WFD */
+
 	wpabuf_free(hapd->time_adv);
 
 #ifdef CONFIG_INTERWORKING

@@ -230,10 +230,27 @@ static struct wpabuf * p2p_group_build_probe_resp_ie(struct p2p_group *group)
 }
 
 
+static struct wpabuf * p2p_group_build_assoc_resp_ie(struct p2p_group *group)
+{
+	struct wpabuf *ie;
+
+	ie = wpabuf_alloc(100);
+	if (ie == NULL)
+		return NULL;
+
+#ifdef CONFIG_WFD
+	wfd_add_wfd_ie(group->p2p->cfg->cb_ctx, group->p2p->wfd, ie);
+#endif
+
+	return ie;
+}
+
+
 static void p2p_group_update_ies(struct p2p_group *group)
 {
 	struct wpabuf *beacon_ie;
 	struct wpabuf *probe_resp_ie;
+	struct wpabuf *assoc_resp_ie;
 
 	probe_resp_ie = p2p_group_build_probe_resp_ie(group);
 	if (probe_resp_ie == NULL)
@@ -250,7 +267,11 @@ static void p2p_group_update_ies(struct p2p_group *group)
 	} else
 		beacon_ie = NULL;
 
-	group->cfg->ie_update(group->cfg->cb_ctx, beacon_ie, probe_resp_ie);
+	assoc_resp_ie = p2p_group_build_assoc_resp_ie(group);
+	wpa_hexdump_buf(MSG_MSGDUMP, "P2P: Update GO Assoc Response WFD IE",
+			assoc_resp_ie);
+
+	group->cfg->ie_update(group->cfg->cb_ctx, beacon_ie, probe_resp_ie, assoc_resp_ie);
 }
 
 
