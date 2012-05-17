@@ -1,15 +1,9 @@
 /*
  * WPA Supplicant
- * Copyright (c) 2003-2011, Jouni Malinen <j@w1.fi>
+ * Copyright (c) 2003-2012, Jouni Malinen <j@w1.fi>
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- * Alternatively, this software may be distributed under the terms of BSD
- * license.
- *
- * See README and COPYING for more details.
+ * This software may be distributed under the terms of the BSD license.
+ * See README for more details.
  *
  * This file implements functions for registering and unregistering
  * %wpa_supplicant interfaces. In addition, this file contains number of
@@ -60,14 +54,11 @@
 
 const char *wpa_supplicant_version =
 "wpa_supplicant v" VERSION_STR "\n"
-"Copyright (c) 2003-2011, Jouni Malinen <j@w1.fi> and contributors";
+"Copyright (c) 2003-2012, Jouni Malinen <j@w1.fi> and contributors";
 
 const char *wpa_supplicant_license =
-"This program is free software. You can distribute it and/or modify it\n"
-"under the terms of the GNU General Public License version 2.\n"
-"\n"
-"Alternatively, this software may be distributed under the terms of the\n"
-"BSD license. See README and COPYING for more details.\n"
+"This software may be distributed under the terms of the BSD license.\n"
+"See README for more details.\n"
 #ifdef EAP_TLS_OPENSSL
 "\nThis product includes software developed by the OpenSSL Project\n"
 "for use in the OpenSSL Toolkit (http://www.openssl.org/)\n"
@@ -77,22 +68,9 @@ const char *wpa_supplicant_license =
 #ifndef CONFIG_NO_STDOUT_DEBUG
 /* Long text divided into parts in order to fit in C89 strings size limits. */
 const char *wpa_supplicant_full_license1 =
-"This program is free software; you can redistribute it and/or modify\n"
-"it under the terms of the GNU General Public License version 2 as\n"
-"published by the Free Software Foundation.\n"
-"\n"
-"This program is distributed in the hope that it will be useful,\n"
-"but WITHOUT ANY WARRANTY; without even the implied warranty of\n"
-"MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the\n"
-"GNU General Public License for more details.\n"
-"\n";
+"";
 const char *wpa_supplicant_full_license2 =
-"You should have received a copy of the GNU General Public License\n"
-"along with this program; if not, write to the Free Software\n"
-"Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA\n"
-"\n"
-"Alternatively, this software may be distributed under the terms of the\n"
-"BSD license.\n"
+"This software may be distributed under the terms of the BSD license.\n"
 "\n"
 "Redistribution and use in source and binary forms, with or without\n"
 "modification, are permitted provided that the following conditions are\n"
@@ -376,7 +354,7 @@ void wpa_supplicant_set_non_wpa_policy(struct wpa_supplicant *wpa_s,
 }
 
 
-static void free_hw_features(struct wpa_supplicant *wpa_s)
+void free_hw_features(struct wpa_supplicant *wpa_s)
 {
 	int i;
 	if (wpa_s->hw.modes == NULL)
@@ -473,6 +451,9 @@ static void wpa_supplicant_cleanup(struct wpa_supplicant *wpa_s)
 	wpa_s->gas = NULL;
 
 	free_hw_features(wpa_s);
+
+	os_free(wpa_s->bssid_filter);
+	wpa_s->bssid_filter = NULL;
 }
 
 
@@ -679,11 +660,6 @@ void wpa_supplicant_terminate_proc(struct wpa_global *global)
 static void wpa_supplicant_terminate(int sig, void *signal_ctx)
 {
 	struct wpa_global *global = signal_ctx;
-	struct wpa_supplicant *wpa_s;
-	for (wpa_s = global->ifaces; wpa_s; wpa_s = wpa_s->next) {
-		wpa_msg(wpa_s, MSG_INFO, WPA_EVENT_TERMINATING "- signal %d "
-			"received", sig);
-	}
 	wpa_supplicant_terminate_proc(global);
 }
 
@@ -1121,6 +1097,10 @@ void wpa_supplicant_associate(struct wpa_supplicant *wpa_s,
 	struct wpa_driver_capa capa;
 	int assoc_failed = 0;
 	struct wpa_ssid *old_ssid;
+#ifdef CONFIG_HT_OVERRIDES
+	struct ieee80211_ht_capabilities htcaps;
+	struct ieee80211_ht_capabilities htcaps_mask;
+#endif /* CONFIG_HT_OVERRIDES */
 
 #ifdef CONFIG_IBSS_RSN
 	ibss_rsn_deinit(wpa_s->ibss_rsn);
@@ -1274,11 +1254,10 @@ void wpa_supplicant_associate(struct wpa_supplicant *wpa_s,
 		u8 *pos;
 		size_t len;
 		int res;
-		int p2p_group;
-		p2p_group = wpa_s->drv_flags & WPA_DRIVER_FLAGS_P2P_CAPABLE;
 		pos = wpa_ie + wpa_ie_len;
 		len = sizeof(wpa_ie) - wpa_ie_len;
-		res = wpas_p2p_assoc_req_ie(wpa_s, bss, pos, len, p2p_group);
+		res = wpas_p2p_assoc_req_ie(wpa_s, bss, pos, len,
+					    ssid->p2p_group);
 		if (res >= 0)
 			wpa_ie_len += res;
 	}
@@ -1364,6 +1343,13 @@ void wpa_supplicant_associate(struct wpa_supplicant *wpa_s,
 		params.ssid = ssid->ssid;
 		params.ssid_len = ssid->ssid_len;
 	}
+
+	if (ssid->mode == WPAS_MODE_IBSS && ssid->bssid_set &&
+	    wpa_s->conf->ap_scan == 2) {
+		params.bssid = ssid->bssid;
+		params.fixed_bssid = 1;
+	}
+
 	if (ssid->mode == WPAS_MODE_IBSS && ssid->frequency > 0 &&
 	    params.freq == 0)
 		params.freq = ssid->frequency; /* Initial channel for IBSS */
@@ -1414,6 +1400,14 @@ void wpa_supplicant_associate(struct wpa_supplicant *wpa_s,
 		params.uapsd = wpa_s->parent->sta_uapsd;
 	else
 		params.uapsd = -1;
+
+#ifdef CONFIG_HT_OVERRIDES
+	os_memset(&htcaps, 0, sizeof(htcaps));
+	os_memset(&htcaps_mask, 0, sizeof(htcaps_mask));
+	params.htcaps = (u8 *) &htcaps;
+	params.htcaps_mask = (u8 *) &htcaps_mask;
+	wpa_supplicant_apply_ht_overrides(wpa_s, ssid, &params);
+#endif /* CONFIG_HT_OVERRIDES */
 
 	ret = wpa_drv_associate(wpa_s, &params);
 	if (ret < 0) {
@@ -1526,6 +1520,7 @@ void wpa_supplicant_disassociate(struct wpa_supplicant *wpa_s,
 		addr = wpa_s->bssid;
 		os_memset(&event, 0, sizeof(event));
 		event.disassoc_info.reason_code = (u16) reason_code;
+		event.disassoc_info.locally_generated = 1;
 		wpa_supplicant_event(wpa_s, EVENT_DISASSOC, &event);
 	}
 
@@ -1552,6 +1547,7 @@ void wpa_supplicant_deauthenticate(struct wpa_supplicant *wpa_s,
 		addr = wpa_s->bssid;
 		os_memset(&event, 0, sizeof(event));
 		event.deauth_info.reason_code = (u16) reason_code;
+		event.deauth_info.locally_generated = 1;
 		wpa_supplicant_event(wpa_s, EVENT_DEAUTH, &event);
 	}
 
@@ -1667,10 +1663,13 @@ void wpa_supplicant_select_network(struct wpa_supplicant *wpa_s,
 {
 
 	struct wpa_ssid *other_ssid;
+	int disconnected = 0;
 
-	if (ssid && ssid != wpa_s->current_ssid && wpa_s->current_ssid)
+	if (ssid && ssid != wpa_s->current_ssid && wpa_s->current_ssid) {
 		wpa_supplicant_disassociate(
 			wpa_s, WLAN_REASON_DEAUTH_LEAVING);
+		disconnected = 1;
+	}
 
 	/*
 	 * Mark all other networks disabled or mark all networks enabled if no
@@ -1695,10 +1694,12 @@ void wpa_supplicant_select_network(struct wpa_supplicant *wpa_s,
 		return;
 	}
 
+	if (ssid)
+		wpa_s->current_ssid = ssid;
 	wpa_s->connect_without_scan = NULL;
 	wpa_s->disconnected = 0;
 	wpa_s->reassociate = 1;
-	wpa_supplicant_req_scan(wpa_s, 0, 0);
+	wpa_supplicant_req_scan(wpa_s, 0, disconnected ? 100000 : 0);
 
 	if (ssid)
 		wpas_notify_network_selected(wpa_s, ssid);
@@ -1939,8 +1940,11 @@ static int wpa_supplicant_set_driver(struct wpa_supplicant *wpa_s,
 		for (i = 0; wpa_drivers[i]; i++) {
 			if (os_strlen(wpa_drivers[i]->name) == len &&
 			    os_strncmp(driver, wpa_drivers[i]->name, len) ==
-			    0)
-				return select_driver(wpa_s, i);
+			    0) {
+				/* First driver that succeeds wins */
+				if (select_driver(wpa_s, i) == 0)
+					return 0;
+			}
 		}
 
 		driver = pos + 1;
@@ -2062,25 +2066,15 @@ void wpa_supplicant_rx_eapol(void *ctx, const u8 *src_addr,
 }
 
 
-/**
- * wpa_supplicant_driver_init - Initialize driver interface parameters
- * @wpa_s: Pointer to wpa_supplicant data
- * Returns: 0 on success, -1 on failure
- *
- * This function is called to initialize driver interface parameters.
- * wpa_drv_init() must have been called before this function to initialize the
- * driver interface.
- */
-int wpa_supplicant_driver_init(struct wpa_supplicant *wpa_s)
+int wpa_supplicant_update_mac_addr(struct wpa_supplicant *wpa_s)
 {
-	static int interface_count = 0;
-
 	if (wpa_s->driver->send_eapol) {
 		const u8 *addr = wpa_drv_get_mac_addr(wpa_s);
 		if (addr)
 			os_memcpy(wpa_s->own_addr, addr, ETH_ALEN);
 	} else if (!(wpa_s->drv_flags &
 		     WPA_DRIVER_FLAGS_P2P_DEDICATED_INTERFACE)) {
+		l2_packet_deinit(wpa_s->l2);
 		wpa_s->l2 = l2_packet_init(wpa_s->ifname,
 					   wpa_drv_get_mac_addr(wpa_s),
 					   ETH_P_EAPOL,
@@ -2100,6 +2094,52 @@ int wpa_supplicant_driver_init(struct wpa_supplicant *wpa_s)
 
 	wpa_dbg(wpa_s, MSG_DEBUG, "Own MAC address: " MACSTR,
 		MAC2STR(wpa_s->own_addr));
+	wpa_sm_set_own_addr(wpa_s->wpa, wpa_s->own_addr);
+
+	return 0;
+}
+
+
+static void wpa_supplicant_rx_eapol_bridge(void *ctx, const u8 *src_addr,
+					   const u8 *buf, size_t len)
+{
+	struct wpa_supplicant *wpa_s = ctx;
+	const struct l2_ethhdr *eth;
+
+	if (len < sizeof(*eth))
+		return;
+	eth = (const struct l2_ethhdr *) buf;
+
+	if (os_memcmp(eth->h_dest, wpa_s->own_addr, ETH_ALEN) != 0 &&
+	    !(eth->h_dest[0] & 0x01)) {
+		wpa_dbg(wpa_s, MSG_DEBUG, "RX EAPOL from " MACSTR " to " MACSTR
+			" (bridge - not for this interface - ignore)",
+			MAC2STR(src_addr), MAC2STR(eth->h_dest));
+		return;
+	}
+
+	wpa_dbg(wpa_s, MSG_DEBUG, "RX EAPOL from " MACSTR " to " MACSTR
+		" (bridge)", MAC2STR(src_addr), MAC2STR(eth->h_dest));
+	wpa_supplicant_rx_eapol(wpa_s, src_addr, buf + sizeof(*eth),
+				len - sizeof(*eth));
+}
+
+
+/**
+ * wpa_supplicant_driver_init - Initialize driver interface parameters
+ * @wpa_s: Pointer to wpa_supplicant data
+ * Returns: 0 on success, -1 on failure
+ *
+ * This function is called to initialize driver interface parameters.
+ * wpa_drv_init() must have been called before this function to initialize the
+ * driver interface.
+ */
+int wpa_supplicant_driver_init(struct wpa_supplicant *wpa_s)
+{
+	static int interface_count = 0;
+
+	if (wpa_supplicant_update_mac_addr(wpa_s) < 0)
+		return -1;
 
 	if (wpa_s->bridge_ifname[0]) {
 		wpa_dbg(wpa_s, MSG_DEBUG, "Receiving packets from bridge "
@@ -2107,8 +2147,8 @@ int wpa_supplicant_driver_init(struct wpa_supplicant *wpa_s)
 		wpa_s->l2_br = l2_packet_init(wpa_s->bridge_ifname,
 					      wpa_s->own_addr,
 					      ETH_P_EAPOL,
-					      wpa_supplicant_rx_eapol, wpa_s,
-					      0);
+					      wpa_supplicant_rx_eapol_bridge,
+					      wpa_s, 1);
 		if (wpa_s->l2_br == NULL) {
 			wpa_msg(wpa_s, MSG_ERROR, "Failed to open l2_packet "
 				"connection for the bridge interface '%s'",
@@ -2127,6 +2167,8 @@ int wpa_supplicant_driver_init(struct wpa_supplicant *wpa_s)
 	wpa_drv_flush_pmkid(wpa_s);
 
 	wpa_s->prev_scan_ssid = WILDCARD_SSID_SCAN;
+	wpa_s->prev_scan_wildcard = 0;
+
 	if (wpa_supplicant_enabled_networks(wpa_s->conf)) {
 		if (wpa_supplicant_delayed_sched_scan(wpa_s, interface_count,
 						      100000))
@@ -2161,6 +2203,225 @@ static struct wpa_supplicant * wpa_supplicant_alloc(void)
 	wpa_s->sched_scanning = 0;
 
 	return wpa_s;
+}
+
+
+#ifdef CONFIG_HT_OVERRIDES
+
+static int wpa_set_htcap_mcs(struct wpa_supplicant *wpa_s,
+			     struct ieee80211_ht_capabilities *htcaps,
+			     struct ieee80211_ht_capabilities *htcaps_mask,
+			     const char *ht_mcs)
+{
+	/* parse ht_mcs into hex array */
+	int i;
+	const char *tmp = ht_mcs;
+	char *end = NULL;
+
+	/* If ht_mcs is null, do not set anything */
+	if (!ht_mcs)
+		return 0;
+
+	/* This is what we are setting in the kernel */
+	os_memset(&htcaps->supported_mcs_set, 0, IEEE80211_HT_MCS_MASK_LEN);
+
+	wpa_msg(wpa_s, MSG_DEBUG, "set_htcap, ht_mcs -:%s:-", ht_mcs);
+
+	for (i = 0; i < IEEE80211_HT_MCS_MASK_LEN; i++) {
+		errno = 0;
+		long v = strtol(tmp, &end, 16);
+		if (errno == 0) {
+			wpa_msg(wpa_s, MSG_DEBUG,
+				"htcap value[%i]: %ld end: %p  tmp: %p",
+				i, v, end, tmp);
+			if (end == tmp)
+				break;
+
+			htcaps->supported_mcs_set[i] = v;
+			tmp = end;
+		} else {
+			wpa_msg(wpa_s, MSG_ERROR,
+				"Failed to parse ht-mcs: %s, error: %s\n",
+				ht_mcs, strerror(errno));
+			return -1;
+		}
+	}
+
+	/*
+	 * If we were able to parse any values, then set mask for the MCS set.
+	 */
+	if (i) {
+		os_memset(&htcaps_mask->supported_mcs_set, 0xff,
+			  IEEE80211_HT_MCS_MASK_LEN - 1);
+		/* skip the 3 reserved bits */
+		htcaps_mask->supported_mcs_set[IEEE80211_HT_MCS_MASK_LEN - 1] =
+			0x1f;
+	}
+
+	return 0;
+}
+
+
+static int wpa_disable_max_amsdu(struct wpa_supplicant *wpa_s,
+				 struct ieee80211_ht_capabilities *htcaps,
+				 struct ieee80211_ht_capabilities *htcaps_mask,
+				 int disabled)
+{
+	u16 msk;
+
+	wpa_msg(wpa_s, MSG_DEBUG, "set_disable_max_amsdu: %d", disabled);
+
+	if (disabled == -1)
+		return 0;
+
+	msk = host_to_le16(HT_CAP_INFO_MAX_AMSDU_SIZE);
+	htcaps_mask->ht_capabilities_info |= msk;
+	if (disabled)
+		htcaps->ht_capabilities_info &= msk;
+	else
+		htcaps->ht_capabilities_info |= msk;
+
+	return 0;
+}
+
+
+static int wpa_set_ampdu_factor(struct wpa_supplicant *wpa_s,
+				struct ieee80211_ht_capabilities *htcaps,
+				struct ieee80211_ht_capabilities *htcaps_mask,
+				int factor)
+{
+	wpa_msg(wpa_s, MSG_DEBUG, "set_ampdu_factor: %d", factor);
+
+	if (factor == -1)
+		return 0;
+
+	if (factor < 0 || factor > 3) {
+		wpa_msg(wpa_s, MSG_ERROR, "ampdu_factor: %d out of range. "
+			"Must be 0-3 or -1", factor);
+		return -EINVAL;
+	}
+
+	htcaps_mask->a_mpdu_params |= 0x3; /* 2 bits for factor */
+	htcaps->a_mpdu_params &= ~0x3;
+	htcaps->a_mpdu_params |= factor & 0x3;
+
+	return 0;
+}
+
+
+static int wpa_set_ampdu_density(struct wpa_supplicant *wpa_s,
+				 struct ieee80211_ht_capabilities *htcaps,
+				 struct ieee80211_ht_capabilities *htcaps_mask,
+				 int density)
+{
+	wpa_msg(wpa_s, MSG_DEBUG, "set_ampdu_density: %d", density);
+
+	if (density == -1)
+		return 0;
+
+	if (density < 0 || density > 7) {
+		wpa_msg(wpa_s, MSG_ERROR,
+			"ampdu_density: %d out of range. Must be 0-7 or -1.",
+			density);
+		return -EINVAL;
+	}
+
+	htcaps_mask->a_mpdu_params |= 0x1C;
+	htcaps->a_mpdu_params &= ~(0x1C);
+	htcaps->a_mpdu_params |= (density << 2) & 0x1C;
+
+	return 0;
+}
+
+
+static int wpa_set_disable_ht40(struct wpa_supplicant *wpa_s,
+				struct ieee80211_ht_capabilities *htcaps,
+				struct ieee80211_ht_capabilities *htcaps_mask,
+				int disabled)
+{
+	/* Masking these out disables HT40 */
+	u16 msk = host_to_le16(HT_CAP_INFO_SUPP_CHANNEL_WIDTH_SET |
+			       HT_CAP_INFO_SHORT_GI40MHZ);
+
+	wpa_msg(wpa_s, MSG_DEBUG, "set_disable_ht40: %d", disabled);
+
+	if (disabled)
+		htcaps->ht_capabilities_info &= ~msk;
+	else
+		htcaps->ht_capabilities_info |= msk;
+
+	htcaps_mask->ht_capabilities_info |= msk;
+
+	return 0;
+}
+
+
+void wpa_supplicant_apply_ht_overrides(
+	struct wpa_supplicant *wpa_s, struct wpa_ssid *ssid,
+	struct wpa_driver_associate_params *params)
+{
+	struct ieee80211_ht_capabilities *htcaps;
+	struct ieee80211_ht_capabilities *htcaps_mask;
+
+	if (!ssid)
+		return;
+
+	params->disable_ht = ssid->disable_ht;
+	if (!params->htcaps || !params->htcaps_mask)
+		return;
+
+	htcaps = (struct ieee80211_ht_capabilities *) params->htcaps;
+	htcaps_mask = (struct ieee80211_ht_capabilities *) params->htcaps_mask;
+	wpa_set_htcap_mcs(wpa_s, htcaps, htcaps_mask, ssid->ht_mcs);
+	wpa_disable_max_amsdu(wpa_s, htcaps, htcaps_mask,
+			      ssid->disable_max_amsdu);
+	wpa_set_ampdu_factor(wpa_s, htcaps, htcaps_mask, ssid->ampdu_factor);
+	wpa_set_ampdu_density(wpa_s, htcaps, htcaps_mask, ssid->ampdu_density);
+	wpa_set_disable_ht40(wpa_s, htcaps, htcaps_mask, ssid->disable_ht40);
+}
+
+#endif /* CONFIG_HT_OVERRIDES */
+
+
+static int pcsc_reader_init(struct wpa_supplicant *wpa_s)
+{
+#ifdef PCSC_FUNCS
+	size_t len;
+
+	if (!wpa_s->conf->pcsc_reader)
+		return 0;
+
+	wpa_s->scard = scard_init(SCARD_TRY_BOTH, wpa_s->conf->pcsc_reader);
+	if (!wpa_s->scard)
+		return 1;
+
+	if (wpa_s->conf->pcsc_pin &&
+	    scard_set_pin(wpa_s->scard, wpa_s->conf->pcsc_pin) < 0) {
+		scard_deinit(wpa_s->scard);
+		wpa_s->scard = NULL;
+		wpa_msg(wpa_s, MSG_ERROR, "PC/SC PIN validation failed");
+		return -1;
+	}
+
+	len = sizeof(wpa_s->imsi) - 1;
+	if (scard_get_imsi(wpa_s->scard, wpa_s->imsi, &len)) {
+		scard_deinit(wpa_s->scard);
+		wpa_s->scard = NULL;
+		wpa_msg(wpa_s, MSG_ERROR, "Could not read IMSI");
+		return -1;
+	}
+	wpa_s->imsi[len] = '\0';
+
+	wpa_s->mnc_len = scard_get_mnc_len(wpa_s->scard);
+
+	wpa_printf(MSG_DEBUG, "SCARD: IMSI %s (MNC length %d)",
+		   wpa_s->imsi, wpa_s->mnc_len);
+
+	wpa_sm_set_scard_ctx(wpa_s->wpa, wpa_s->scard);
+	eapol_sm_register_scard_ctx(wpa_s->eapol, wpa_s->scard);
+#endif /* PCSC_FUNCS */
+
+	return 0;
 }
 
 
@@ -2323,6 +2584,7 @@ next_driver:
 	if (wpa_drv_get_capa(wpa_s, &capa) == 0) {
 		wpa_s->drv_capa_known = 1;
 		wpa_s->drv_flags = capa.flags;
+		wpa_s->probe_resp_offloads = capa.probe_resp_offloads;
 		wpa_s->max_scan_ssids = capa.max_scan_ssids;
 		wpa_s->max_sched_scan_ssids = capa.max_sched_scan_ssids;
 		wpa_s->sched_scan_supported = capa.sched_scan_supported;
@@ -2346,8 +2608,6 @@ next_driver:
 		wpa_dbg(wpa_s, MSG_DEBUG, "Failed to set country");
 		return -1;
 	}
-
-	wpa_sm_set_own_addr(wpa_s->wpa, wpa_s->own_addr);
 
 	if (wpas_wps_init(wpa_s))
 		return -1;
@@ -2393,6 +2653,9 @@ next_driver:
 	if (wpa_bss_init(wpa_s) < 0)
 		return -1;
 
+	if (pcsc_reader_init(wpa_s) < 0)
+		return -1;
+
 	return 0;
 }
 
@@ -2416,12 +2679,6 @@ static void wpa_supplicant_deinit_iface(struct wpa_supplicant *wpa_s,
 	if (notify)
 		wpas_notify_iface_removed(wpa_s);
 
-/**
- * The wpa_drv_deinit call after sending TERMINATING to the framework causes
- * race condition with the start of hostapd.
- * This has been moved out of wpa_supplicant_cleanup(). Send the control
- * message and free config after the deinit.
- */
 	if (terminate)
 		wpa_msg(wpa_s, MSG_INFO, WPA_EVENT_TERMINATING);
 
@@ -2795,6 +3052,8 @@ void wpa_supplicant_deinit(struct wpa_global *global)
 	os_free(global->params.override_driver);
 	os_free(global->params.override_ctrl_interface);
 
+	os_free(global->p2p_disallow_freq);
+
 	os_free(global);
 	wpa_debug_close_syslog();
 	wpa_debug_close_file();
@@ -2885,6 +3144,9 @@ void wpas_connection_failed(struct wpa_supplicant *wpa_s, const u8 *bssid)
 	int count;
 	int *freqs = NULL;
 
+	/*
+	 * Remove possible authentication timeout since the connection failed.
+	 */
 	eloop_cancel_timeout(wpa_supplicant_timeout, wpa_s, NULL);
 
 	/*

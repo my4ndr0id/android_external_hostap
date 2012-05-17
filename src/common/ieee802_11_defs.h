@@ -3,14 +3,8 @@
  * Copyright (c) 2002-2009, Jouni Malinen <j@w1.fi>
  * Copyright (c) 2007-2008 Intel Corporation
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- * Alternatively, this software may be distributed under the terms of BSD
- * license.
- *
- * See README and COPYING for more details.
+ * This software may be distributed under the terms of the BSD license.
+ * See README for more details.
  */
 
 #ifndef IEEE802_11_DEFS_H
@@ -519,6 +513,9 @@ struct ieee80211_mgmt {
 } STRUCT_PACKED;
 
 
+/* Rx MCS bitmask is in the first 77 bits of supported_mcs_set */
+#define IEEE80211_HT_MCS_MASK_LEN 10
+
 struct ieee80211_ht_capabilities {
 	le16 ht_capabilities_info;
 	u8 a_mpdu_params;
@@ -677,6 +674,10 @@ struct wmm_information_element {
 	u8 qos_info; /* AP/STA specific QoS info */
 
 } STRUCT_PACKED;
+
+#define WMM_QOSINFO_STA_AC_MASK 0x0f
+#define WMM_QOSINFO_STA_SP_MASK 0x03
+#define WMM_QOSINFO_STA_SP_SHIFT 5
 
 #define WMM_AC_AIFSN_MASK 0x0f
 #define WMM_AC_AIFNS_SHIFT 0

@@ -2,14 +2,8 @@
  * wpa_supplicant/hostapd / common helper functions, etc.
  * Copyright (c) 2002-2007, Jouni Malinen <j@w1.fi>
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- * Alternatively, this software may be distributed under the terms of BSD
- * license.
- *
- * See README and COPYING for more details.
+ * This software may be distributed under the terms of the BSD license.
+ * See README for more details.
  */
 
 #include "includes.h"
@@ -377,7 +371,7 @@ const char * wpa_ssid_txt(const u8 *ssid, size_t ssid_len)
 #ifndef WPA_UNICODE_SSID
 		if ((u8) *pos < 32 || (u8) *pos >= 127)
 			*pos = '_';
-#endif
+#endif /* WPA_UNICODE_SSID */
 	}
 	return ssid_txt;
 }

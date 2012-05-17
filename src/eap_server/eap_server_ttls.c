@@ -2,14 +2,8 @@
  * hostapd / EAP-TTLS (RFC 5281)
  * Copyright (c) 2004-2011, Jouni Malinen <j@w1.fi>
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- * Alternatively, this software may be distributed under the terms of BSD
- * license.
- *
- * See README and COPYING for more details.
+ * This software may be distributed under the terms of the BSD license.
+ * See README for more details.
  */
 
 #include "includes.h"
@@ -98,7 +92,8 @@ static u8 * eap_ttls_avp_hdr(u8 *avphdr, u32 avp_code, u32 vendor_id,
 	}
 
 	avp->avp_code = host_to_be32(avp_code);
-	avp->avp_length = host_to_be32((flags << 24) | (hdrlen + len));
+	avp->avp_length = host_to_be32(((u32) flags << 24) |
+				       ((u32) (hdrlen + len)));
 
 	return avphdr + hdrlen;
 }

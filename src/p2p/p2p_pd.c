@@ -2,14 +2,8 @@
  * Wi-Fi Direct - P2P provision discovery
  * Copyright (c) 2009-2010, Atheros Communications
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- * Alternatively, this software may be distributed under the terms of BSD
- * license.
- *
- * See README and COPYING for more details.
+ * This software may be distributed under the terms of the BSD license.
+ * See README for more details.
  */
 
 #include "includes.h"
@@ -124,7 +118,7 @@ void p2p_process_prov_disc_req(struct p2p_data *p2p, const u8 *sa,
 		wpa_msg(p2p->cfg->msg_ctx, MSG_DEBUG,
 			"P2P: Provision Discovery Request from "
 			"unknown peer " MACSTR, MAC2STR(sa));
-		if (p2p_add_device(p2p, sa, rx_freq, 0, data + 1, len - 1, 0)) {
+		if (p2p_add_device(p2p, sa, rx_freq, 0, data + 1, len - 1)) {
 			wpa_msg(p2p->cfg->msg_ctx, MSG_DEBUG,
 			        "P2P: Provision Discovery Request add device "
 				"failed " MACSTR, MAC2STR(sa));
@@ -137,6 +131,21 @@ void p2p_process_prov_disc_req(struct p2p_data *p2p, const u8 *sa,
 		wpa_msg(p2p->cfg->msg_ctx, MSG_DEBUG, "P2P: Unsupported "
 			"Config Methods in Provision Discovery Request");
 		goto out;
+	}
+
+	if (msg.group_id) {
+		size_t i;
+		for (i = 0; i < p2p->num_groups; i++) {
+			if (p2p_group_is_group_id_match(p2p->groups[i],
+							msg.group_id,
+							msg.group_id_len))
+				break;
+		}
+		if (i == p2p->num_groups) {
+			wpa_msg(p2p->cfg->msg_ctx, MSG_DEBUG, "P2P: PD "
+				"request for unknown P2P Group ID - reject");
+			goto out;
+		}
 	}
 
 	if (dev)
@@ -199,8 +208,8 @@ out:
 					msg.device_name, msg.config_methods,
 					msg.capability ? msg.capability[0] : 0,
 					msg.capability ? msg.capability[1] :
-					0);
-
+					0,
+					msg.group_id, msg.group_id_len);
 	}
 	p2p_parse_free(&msg);
 }
@@ -212,19 +221,20 @@ void p2p_process_prov_disc_resp(struct p2p_data *p2p, const u8 *sa,
 	struct p2p_message msg;
 	struct p2p_device *dev;
 	u16 report_config_methods = 0;
+	int success = 0;
 
 	if (p2p_parse(data, len, &msg))
 		return;
 
 	wpa_msg(p2p->cfg->msg_ctx, MSG_DEBUG,
-		"P2P: Received Provisioning Discovery Response from " MACSTR
+		"P2P: Received Provision Discovery Response from " MACSTR
 		" with config methods 0x%x",
 		MAC2STR(sa), msg.wps_config_methods);
 
 	dev = p2p_get_device(p2p, sa);
 	if (dev == NULL || !dev->req_config_methods) {
 		wpa_msg(p2p->cfg->msg_ctx, MSG_DEBUG,
-			"P2P: Ignore Provisioning Discovery Response from "
+			"P2P: Ignore Provision Discovery Response from "
 			MACSTR " with no pending request", MAC2STR(sa));
 		p2p_parse_free(&msg);
 		return;
@@ -237,7 +247,7 @@ void p2p_process_prov_disc_resp(struct p2p_data *p2p, const u8 *sa,
 
 	if (dev->dialog_token != msg.dialog_token) {
 		wpa_msg(p2p->cfg->msg_ctx, MSG_DEBUG,
-			"P2P: Ignore Provisioning Discovery Response with "
+			"P2P: Ignore Provision Discovery Response with "
 			"unexpected Dialog Token %u (expected %u)",
 			msg.dialog_token, dev->dialog_token);
 		p2p_parse_free(&msg);
@@ -254,7 +264,7 @@ void p2p_process_prov_disc_resp(struct p2p_data *p2p, const u8 *sa,
 
 	if (msg.wps_config_methods != dev->req_config_methods) {
 		wpa_msg(p2p->cfg->msg_ctx, MSG_DEBUG, "P2P: Peer rejected "
-			"our Provisioning Discovery Request");
+			"our Provision Discovery Request");
 		if (p2p->cfg->prov_disc_fail)
 			p2p->cfg->prov_disc_fail(p2p->cfg->cb_ctx, sa,
 						 P2P_PROV_DISC_REJECTED);
@@ -280,49 +290,37 @@ void p2p_process_prov_disc_resp(struct p2p_data *p2p, const u8 *sa,
 	dev->wps_prov_info = msg.wps_config_methods;
 
 	p2p_parse_free(&msg);
+	success = 1;
 
 out:
 	dev->req_config_methods = 0;
 	p2p->cfg->send_action_done(p2p->cfg->cb_ctx);
 	if (dev->flags & P2P_DEV_PD_BEFORE_GO_NEG) {
-		wpa_msg(p2p->cfg->msg_ctx, MSG_DEBUG,
-			"P2P: Start GO Neg after the PD-before-GO-Neg "
-			"workaround with " MACSTR,
-			MAC2STR(dev->info.p2p_device_addr));
-		dev->flags &= ~P2P_DEV_PD_BEFORE_GO_NEG;
-		p2p_connect_send(p2p, dev);
-		return;
+	        wpa_msg(p2p->cfg->msg_ctx, MSG_DEBUG,
+	                "P2P: Start GO Neg after the PD-before-GO-Neg "
+	                "workaround with " MACSTR,
+	                MAC2STR(dev->info.p2p_device_addr));
+	        dev->flags &= ~P2P_DEV_PD_BEFORE_GO_NEG;
+	        p2p_connect_send(p2p, dev);
+	        return;
 	}
-	if (p2p->cfg->prov_disc_resp)
+	if (success && p2p->cfg->prov_disc_resp)
 		p2p->cfg->prov_disc_resp(p2p->cfg->cb_ctx, sa,
 					 report_config_methods);
 }
 
 
 int p2p_send_prov_disc_req(struct p2p_data *p2p, struct p2p_device *dev,
-				int join, int force_freq)
+			   int join, int force_freq)
 {
 	struct wpabuf *req;
 	int freq;
-#ifdef ANDROID_BRCM_P2P_PATCH
-	if(dev->go_state == REMOTE_GO) {
-		wpa_msg(p2p->cfg->msg_ctx, MSG_DEBUG,
-			"P2P: GO Sending it to oper_freq %d", dev->oper_freq);
-		freq= dev->oper_freq;
-	}
-	else {
-		wpa_msg(p2p->cfg->msg_ctx, MSG_DEBUG,
-			"P2P: NOT GO oper_freq %d listen_freq %d", dev->oper_freq, dev->listen_freq);
-		freq = dev->listen_freq > 0 ? dev->listen_freq : dev->oper_freq;
-	}
-#else
+
 	if (force_freq > 0)
 		freq = force_freq;
 	else
 		freq = dev->listen_freq > 0 ? dev->listen_freq :
-					dev->oper_freq;
-#endif
-
+			dev->oper_freq;
 	if (freq <= 0) {
 		wpa_msg(p2p->cfg->msg_ctx, MSG_DEBUG,
 			"P2P: No Listen/Operating frequency known for the "
@@ -372,7 +370,7 @@ int p2p_send_prov_disc_req(struct p2p_data *p2p, struct p2p_device *dev,
 
 
 int p2p_prov_disc_req(struct p2p_data *p2p, const u8 *peer_addr,
-			u16 config_methods, int join, int force_freq)
+		      u16 config_methods, int join, int force_freq)
 {
 	struct p2p_device *dev;
 
@@ -402,7 +400,7 @@ int p2p_prov_disc_req(struct p2p_data *p2p, const u8 *peer_addr,
 		dev->flags &= ~P2P_DEV_PD_FOR_JOIN;
 
 	if (p2p->state != P2P_IDLE && p2p->state != P2P_SEARCH &&
-		p2p->state != P2P_LISTEN_ONLY) {
+	    p2p->state != P2P_LISTEN_ONLY) {
 		wpa_msg(p2p->cfg->msg_ctx, MSG_DEBUG, "P2P: Busy with other "
 			"operations; postpone Provision Discovery Request "
 			"with " MACSTR " (config methods 0x%x)",

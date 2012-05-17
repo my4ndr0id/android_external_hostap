@@ -1,15 +1,9 @@
 /*
  * WPA Supplicant - WPA state machine and EAPOL-Key processing
- * Copyright (c) 2003-2010, Jouni Malinen <j@w1.fi>
+ * Copyright (c) 2003-2012, Jouni Malinen <j@w1.fi>
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- * Alternatively, this software may be distributed under the terms of BSD
- * license.
- *
- * See README and COPYING for more details.
+ * This software may be distributed under the terms of the BSD license.
+ * See README for more details.
  */
 
 #include "includes.h"
@@ -151,7 +145,8 @@ static int wpa_supplicant_get_pmk(struct wpa_sm *sm,
 		 * not have enough time to get the association information
 		 * event before receiving this 1/4 message, so try to find a
 		 * matching PMKSA cache entry here. */
-		sm->cur_pmksa = pmksa_cache_get(sm->pmksa, src_addr, pmkid);
+		sm->cur_pmksa = pmksa_cache_get(sm->pmksa, src_addr, pmkid,
+						NULL);
 		if (sm->cur_pmksa) {
 			wpa_dbg(sm->ctx->msg_ctx, MSG_DEBUG,
 				"RSN: found matching PMKID from PMKSA cache");
@@ -205,7 +200,8 @@ static int wpa_supplicant_get_pmk(struct wpa_sm *sm,
 						sm->network_ctx, sm->key_mgmt);
 			}
 			if (!sm->cur_pmksa && pmkid &&
-			    pmksa_cache_get(sm->pmksa, src_addr, pmkid)) {
+			    pmksa_cache_get(sm->pmksa, src_addr, pmkid, NULL))
+			{
 				wpa_dbg(sm->ctx->msg_ctx, MSG_DEBUG,
 					"RSN: the new PMK matches with the "
 					"PMKID");
@@ -396,7 +392,8 @@ static void wpa_supplicant_process_1_of_4(struct wpa_sm *sm,
 		const u8 *_buf = (const u8 *) (key + 1);
 		size_t len = WPA_GET_BE16(key->key_data_length);
 		wpa_hexdump(MSG_DEBUG, "RSN: msg 1/4 key data", _buf, len);
-		wpa_supplicant_parse_ies(_buf, len, &ie);
+		if (wpa_supplicant_parse_ies(_buf, len, &ie) < 0)
+			goto failed;
 		if (ie.pmkid) {
 			wpa_hexdump(MSG_DEBUG, "RSN: PMKID from "
 				    "Authenticator", ie.pmkid, PMKID_LEN);
@@ -1085,7 +1082,8 @@ static void wpa_supplicant_process_3_of_4(struct wpa_sm *sm,
 	pos = (const u8 *) (key + 1);
 	len = WPA_GET_BE16(key->key_data_length);
 	wpa_hexdump(MSG_DEBUG, "WPA: IE KeyData", pos, len);
-	wpa_supplicant_parse_ies(pos, len, &ie);
+	if (wpa_supplicant_parse_ies(pos, len, &ie) < 0)
+		goto failed;
 	if (ie.gtk && !(key_info & WPA_KEY_INFO_ENCR_KEY_DATA)) {
 		wpa_msg(sm->ctx->msg_ctx, MSG_WARNING,
 			"WPA: GTK IE in unencrypted key data");
@@ -1193,7 +1191,8 @@ static int wpa_supplicant_process_1_of_2_rsn(struct wpa_sm *sm,
 	struct wpa_eapol_ie_parse ie;
 
 	wpa_hexdump(MSG_DEBUG, "RSN: msg 1/2 key data", keydata, keydatalen);
-	wpa_supplicant_parse_ies(keydata, keydatalen, &ie);
+	if (wpa_supplicant_parse_ies(keydata, keydatalen, &ie) < 0)
+		return -1;
 	if (ie.gtk && !(key_info & WPA_KEY_INFO_ENCR_KEY_DATA)) {
 		wpa_msg(sm->ctx->msg_ctx, MSG_WARNING,
 			"WPA: GTK IE in unencrypted key data");

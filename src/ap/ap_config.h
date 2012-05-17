@@ -2,14 +2,8 @@
  * hostapd / Configuration definitions and helpers functions
  * Copyright (c) 2003-2009, Jouni Malinen <j@w1.fi>
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- * Alternatively, this software may be distributed under the terms of BSD
- * license.
- *
- * See README and COPYING for more details.
+ * This software may be distributed under the terms of the BSD license.
+ * See README for more details.
  */
 
 #ifndef HOSTAPD_CONFIG_H
@@ -148,6 +142,12 @@ struct hostapd_roaming_consortium {
 	u8 oi[MAX_ROAMING_CONSORTIUM_LEN];
 };
 
+struct hostapd_venue_name {
+	u8 lang[3];
+	u8 name_len;
+	u8 name[252];
+};
+
 /**
  * struct hostapd_bss_config - Per-BSS configuration
  */
@@ -219,6 +219,11 @@ struct hostapd_bss_config {
 	/* dot11AssociationSAQueryRetryTimeout (in TUs) */
 	int assoc_sa_query_retry_timeout;
 #endif /* CONFIG_IEEE80211W */
+	enum {
+		PSK_RADIUS_IGNORED = 0,
+		PSK_RADIUS_ACCEPTED = 1,
+		PSK_RADIUS_REQUIRED = 2
+	} wpa_psk_radius;
 	int wpa_pairwise;
 	int wpa_group;
 	int wpa_group_rekey;
@@ -335,6 +340,7 @@ struct hostapd_bss_config {
 	int p2p;
 
 	int disassoc_low_ack;
+	int skip_inactivity_poll;
 
 #define TDLS_PROHIBIT BIT(0)
 #define TDLS_PROHIBIT_CHAN_SWITCH BIT(1)
@@ -360,6 +366,19 @@ struct hostapd_bss_config {
 	/* IEEE 802.11u - Roaming Consortium list */
 	unsigned int roaming_consortium_count;
 	struct hostapd_roaming_consortium *roaming_consortium;
+
+	/* IEEE 802.11u - Venue Name duples */
+	unsigned int venue_name_count;
+	struct hostapd_venue_name *venue_name;
+
+	u16 gas_comeback_delay;
+	int gas_frag_limit;
+
+	u8 wps_rf_bands; /* RF bands for WPS (WPS_RF_*) */
+
+#ifdef CONFIG_RADIUS_TEST
+	char *dump_msk_file;
+#endif /* CONFIG_RADIUS_TEST */
 };
 
 

@@ -2,14 +2,8 @@
  * Wi-Fi Protected Setup - common functionality
  * Copyright (c) 2008-2009, Jouni Malinen <j@w1.fi>
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- * Alternatively, this software may be distributed under the terms of BSD
- * license.
- *
- * See README and COPYING for more details.
+ * This software may be distributed under the terms of the BSD license.
+ * See README for more details.
  */
 
 #include "includes.h"
@@ -309,15 +303,6 @@ void wps_pbc_timeout_event(struct wps_context *wps)
 		return;
 
 	wps->event_cb(wps->cb_ctx, WPS_EV_PBC_TIMEOUT, NULL);
-}
-
-
-void wps_registrar_sel_registrar_changed_event(struct wps_context *wps)
-{
-	if (wps->event_cb == NULL)
-		return;
-
-	wps->event_cb(wps->cb_ctx, WPS_EV_ER_SET_SELECTED_REGISTRAR, NULL);
 }
 
 

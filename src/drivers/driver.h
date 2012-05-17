@@ -1,15 +1,9 @@
 /*
  * Driver interface definition
- * Copyright (c) 2003-2010, Jouni Malinen <j@w1.fi>
+ * Copyright (c) 2003-2012, Jouni Malinen <j@w1.fi>
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- * Alternatively, this software may be distributed under the terms of BSD
- * license.
- *
- * See README and COPYING for more details.
+ * This software may be distributed under the terms of the BSD license.
+ * See README for more details.
  *
  * This file defines a driver interface used by both %wpa_supplicant and
  * hostapd. The first part of the file defines data structures used in various
@@ -516,6 +510,26 @@ struct wpa_driver_associate_params {
 	 * STA mode: bits 0..3 UAPSD enabled for VO,VI,BK,BE
 	 */
 	int uapsd;
+
+	/**
+	 * fixed_bssid - Whether to force this BSSID in IBSS mode
+	 * 1 = Fix this BSSID and prevent merges.
+	 * 0 = Do not fix BSSID.
+	 */
+	int fixed_bssid;
+
+	/**
+	 * disable_ht - Disable HT (IEEE 802.11n) for this connection
+	 */
+	int disable_ht;
+
+	/**
+	 * HT Capabilities over-rides. Only bits set in the mask will be used,
+	 * and not all values are used by the kernel anyway. Currently, MCS,
+	 * MPDU and MSDU fields are used.
+	 */
+	const u8 *htcaps;       /* struct ieee80211_ht_capabilities * */
+	const u8 *htcaps_mask;  /* struct ieee80211_ht_capabilities * */
 };
 
 enum hide_ssid {
@@ -554,6 +568,27 @@ struct wpa_driver_ap_params {
 	 * beacon_int - Beacon interval
 	 */
 	int beacon_int;
+
+	/**
+	 * basic_rates: -1 terminated array of basic rates in 100 kbps
+	 *
+	 * This parameter can be used to set a specific basic rate set for the
+	 * BSS. If %NULL, default basic rate set is used.
+	 */
+	int *basic_rates;
+
+	/**
+	 * proberesp - Probe Response template
+	 *
+	 * This is used by drivers that reply to Probe Requests internally in
+	 * AP mode and require the full Probe Response template.
+	 */
+	const u8 *proberesp;
+
+	/**
+	 * proberesp_len - Length of the proberesp buffer in octets
+	 */
+	size_t proberesp_len;
 
 	/**
 	 * ssid - The SSID to use in Beacon/Probe Response frames
@@ -628,7 +663,7 @@ struct wpa_driver_ap_params {
 	 * isolate - Whether to isolate frames between associated stations
 	 *
 	 * If this is non-zero, the AP is requested to disable forwarding of
-	 * frames between association stations.
+	 * frames between associated stations.
 	 */
 	int isolate;
 
@@ -751,6 +786,10 @@ struct wpa_driver_capa {
 #define WPA_DRIVER_FLAGS_TDLS_SUPPORT			0x00080000
 /* Driver requires external TDLS setup/teardown/discovery */
 #define WPA_DRIVER_FLAGS_TDLS_EXTERNAL_SETUP		0x00100000
+/* Driver indicates support for Probe Response offloading in AP mode */
+#define WPA_DRIVER_FLAGS_PROBE_RESP_OFFLOAD		0x00200000
+/* Driver supports U-APSD in AP mode */
+#define WPA_DRIVER_FLAGS_AP_UAPSD			0x00400000
 	unsigned int flags;
 
 	int max_scan_ssids;
@@ -768,6 +807,20 @@ struct wpa_driver_capa {
 	 * supports in AP mode
 	 */
 	unsigned int max_stations;
+
+	/**
+	 * probe_resp_offloads - Bitmap of supported protocols by the driver
+	 * for Probe Response offloading.
+	 */
+/* Driver Probe Response offloading support for WPS ver. 1 */
+#define WPA_DRIVER_PROBE_RESP_OFFLOAD_WPS		0x00000001
+/* Driver Probe Response offloading support for WPS ver. 2 */
+#define WPA_DRIVER_PROBE_RESP_OFFLOAD_WPS2		0x00000002
+/* Driver Probe Response offloading support for P2P */
+#define WPA_DRIVER_PROBE_RESP_OFFLOAD_P2P		0x00000004
+/* Driver Probe Response offloading support for IEEE 802.11u (Interworking) */
+#define WPA_DRIVER_PROBE_RESP_OFFLOAD_INTERWORKING	0x00000008
+	unsigned int probe_resp_offloads;
 };
 
 
@@ -795,6 +848,7 @@ struct hostapd_sta_add_params {
 	const struct ieee80211_ht_capabilities *ht_capabilities;
 	u32 flags; /* bitmask of WPA_STA_* flags */
 	int set; /* Set STA parameters instead of add */
+	u8 qosinfo;
 };
 
 struct hostapd_freq_params {
@@ -1685,17 +1739,6 @@ struct wpa_driver_ops {
 			     int total_flags, int flags_or, int flags_and);
 
 	/**
-	 * set_rate_sets - Set supported and basic rate sets (AP only)
-	 * @priv: Private driver interface data
-	 * @supp_rates: -1 terminated array of supported rates in 100 kbps
-	 * @basic_rates: -1 terminated array of basic rates in 100 kbps
-	 * @mode: hardware mode (HOSTAPD_MODE_*)
-	 * Returns: 0 on success, -1 on failure
-	 */
-	int (*set_rate_sets)(void *priv, int *supp_rates, int *basic_rates,
-			     int mode);
-
-	/**
 	 * set_tx_queue_params - Set TX queue parameters
 	 * @priv: Private driver interface data
 	 * @queue: Queue number (0 = VO, 1 = VI, 2 = BE, 3 = BK)
@@ -2456,6 +2499,18 @@ struct wpa_driver_ops {
 			    const u8 *addr, int qos);
 
 	/**
+	 * radio_disable - Disable/enable radio
+	 * @priv: Private driver interface data
+	 * @disabled: 1=disable 0=enable radio
+	 * Returns: 0 on success, -1 on failure
+	 *
+	 * This optional command is for testing purposes. It can be used to
+	 * disable the radio on a testbed device to simulate out-of-radio-range
+	 * conditions.
+	 */
+	int (*radio_disable)(void *priv, int disabled);
+
+	/**
 	 * driver_cmd - execute driver-specific command
 	 * @priv: private driver interface data
 	 * @cmd: command to execute
@@ -3010,6 +3065,11 @@ union wpa_event_data {
 		 * ie_len - Length of ie buffer in octets
 		 */
 		size_t ie_len;
+
+		/**
+		 * locally_generated - Whether the frame was locally generated
+		 */
+		int locally_generated;
 	} disassoc_info;
 
 	/**
@@ -3036,6 +3096,11 @@ union wpa_event_data {
 		 * ie_len - Length of ie buffer in octets
 		 */
 		size_t ie_len;
+
+		/**
+		 * locally_generated - Whether the frame was locally generated
+		 */
+		int locally_generated;
 	} deauth_info;
 
 	/**

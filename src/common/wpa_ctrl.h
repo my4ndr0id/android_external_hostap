@@ -2,14 +2,8 @@
  * wpa_supplicant/hostapd control interface library
  * Copyright (c) 2004-2006, Jouni Malinen <j@w1.fi>
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- * Alternatively, this software may be distributed under the terms of BSD
- * license.
- *
- * See README and COPYING for more details.
+ * This software may be distributed under the terms of the BSD license.
+ * See README for more details.
  */
 
 #ifndef WPA_CTRL_H
@@ -130,6 +124,7 @@ extern "C" {
 #define P2P_EVENT_SERV_DISC_RESP "P2P-SERV-DISC-RESP "
 #define P2P_EVENT_INVITATION_RECEIVED "P2P-INVITATION-RECEIVED "
 #define P2P_EVENT_INVITATION_RESULT "P2P-INVITATION-RESULT "
+#define P2P_EVENT_FIND_STOPPED "P2P-FIND-STOPPED "
 
 #define INTERWORKING_AP "INTERWORKING-AP "
 #define INTERWORKING_NO_MATCH "INTERWORKING-NO-MATCH "

@@ -2,14 +2,8 @@
  * Wi-Fi Protected Setup - Registrar
  * Copyright (c) 2008-2009, Jouni Malinen <j@w1.fi>
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- * Alternatively, this software may be distributed under the terms of BSD
- * license.
- *
- * See README and COPYING for more details.
+ * This software may be distributed under the terms of the BSD license.
+ * See README for more details.
  */
 
 #include "utils/includes.h"
@@ -108,7 +102,8 @@ struct wps_registrar {
 	void (*pin_needed_cb)(void *ctx, const u8 *uuid_e,
 			      const struct wps_device_data *dev);
 	void (*reg_success_cb)(void *ctx, const u8 *mac_addr,
-			       const u8 *uuid_e);
+			       const u8 *uuid_e, const u8 *dev_pw,
+			       size_t dev_pw_len);
 	void (*set_sel_reg_cb)(void *ctx, int sel_reg, u16 dev_passwd_id,
 			       u16 sel_reg_config_methods);
 	void (*enrollee_seen_cb)(void *ctx, const u8 *addr, const u8 *uuid_e,
@@ -310,13 +305,17 @@ static void wps_registrar_add_pbc_session(struct wps_registrar *reg,
 
 
 static void wps_registrar_remove_pbc_session(struct wps_registrar *reg,
-					     const u8 *uuid_e)
+					     const u8 *uuid_e,
+					     const u8 *p2p_dev_addr)
 {
 	struct wps_pbc_session *pbc, *prev = NULL, *tmp;
 
 	pbc = reg->pbc_sessions;
 	while (pbc) {
-		if (os_memcmp(pbc->uuid_e, uuid_e, WPS_UUID_LEN) == 0) {
+		if (os_memcmp(pbc->uuid_e, uuid_e, WPS_UUID_LEN) == 0 ||
+		    (p2p_dev_addr && !is_zero_ether_addr(reg->p2p_dev_addr) &&
+		     os_memcmp(reg->p2p_dev_addr, p2p_dev_addr, ETH_ALEN) ==
+		     0)) {
 			if (prev)
 				prev->next = pbc->next;
 			else
@@ -737,14 +736,22 @@ static void wps_registrar_expire_pins(struct wps_registrar *reg)
 /**
  * wps_registrar_invalidate_wildcard_pin - Invalidate a wildcard PIN
  * @reg: Registrar data from wps_registrar_init()
+ * @dev_pw: PIN to search for or %NULL to match any
+ * @dev_pw_len: Length of dev_pw in octets
  * Returns: 0 on success, -1 if not wildcard PIN is enabled
  */
-static int wps_registrar_invalidate_wildcard_pin(struct wps_registrar *reg)
+static int wps_registrar_invalidate_wildcard_pin(struct wps_registrar *reg,
+						 const u8 *dev_pw,
+						 size_t dev_pw_len)
 {
 	struct wps_uuid_pin *pin, *prev;
 
 	dl_list_for_each_safe(pin, prev, &reg->pins, struct wps_uuid_pin, list)
 	{
+		if (dev_pw && pin->pin &&
+		    (dev_pw_len != pin->pin_len ||
+		     os_memcmp(dev_pw, pin->pin, dev_pw_len) != 0))
+			continue; /* different PIN */
 		if (pin->wildcard_uuid) {
 			wpa_hexdump(MSG_DEBUG, "WPS: Invalidated PIN for UUID",
 				    pin->uuid, WPS_UUID_LEN);
@@ -800,10 +807,11 @@ static const u8 * wps_registrar_get_pin(struct wps_registrar *reg,
 		/* Check for wildcard UUIDs since none of the UUID-specific
 		 * PINs matched */
 		dl_list_for_each(pin, &reg->pins, struct wps_uuid_pin, list) {
-			if (pin->wildcard_uuid == 1) {
+			if (pin->wildcard_uuid == 1 ||
+			    pin->wildcard_uuid == 2) {
 				wpa_printf(MSG_DEBUG, "WPS: Found a wildcard "
 					   "PIN. Assigned it for this UUID-E");
-				pin->wildcard_uuid = 2;
+				pin->wildcard_uuid++;
 				os_memcpy(pin->uuid, uuid, WPS_UUID_LEN);
 				found = pin;
 				break;
@@ -845,7 +853,7 @@ int wps_registrar_unlock_pin(struct wps_registrar *reg, const u8 *uuid)
 
 	dl_list_for_each(pin, &reg->pins, struct wps_uuid_pin, list) {
 		if (os_memcmp(pin->uuid, uuid, WPS_UUID_LEN) == 0) {
-			if (pin->wildcard_uuid == 2) {
+			if (pin->wildcard_uuid == 3) {
 				wpa_printf(MSG_DEBUG, "WPS: Invalidating used "
 					   "wildcard PIN");
 				return wps_registrar_invalidate_pin(reg, uuid);
@@ -941,17 +949,38 @@ static void wps_registrar_pin_completed(struct wps_registrar *reg)
 }
 
 
+void wps_registrar_complete(struct wps_registrar *registrar, const u8 *uuid_e,
+			    const u8 *dev_pw, size_t dev_pw_len)
+{
+	if (registrar->pbc) {
+		wps_registrar_remove_pbc_session(registrar,
+						 uuid_e, NULL);
+		wps_registrar_pbc_completed(registrar);
+	} else {
+		wps_registrar_pin_completed(registrar);
+	}
+
+	if (dev_pw &&
+	    wps_registrar_invalidate_wildcard_pin(registrar, dev_pw,
+						  dev_pw_len) == 0) {
+		wpa_hexdump_key(MSG_DEBUG, "WPS: Invalidated wildcard PIN",
+				dev_pw, dev_pw_len);
+	}
+}
+
+
 int wps_registrar_wps_cancel(struct wps_registrar *reg)
 {
 	if (reg->pbc) {
 		wpa_printf(MSG_DEBUG, "WPS: PBC is set - cancelling it");
 		wps_registrar_pbc_timeout(reg, NULL);
+		eloop_cancel_timeout(wps_registrar_pbc_timeout, reg, NULL);
 		return 1;
 	} else if (reg->selected_registrar) {
 		/* PIN Method */
 		wpa_printf(MSG_DEBUG, "WPS: PIN is set - cancelling it");
 		wps_registrar_pin_completed(reg);
-		wps_registrar_invalidate_wildcard_pin(reg);
+		wps_registrar_invalidate_wildcard_pin(reg, NULL, 0);
 		return 1;
 	}
 	return 0;
@@ -1054,12 +1083,13 @@ static void wps_cb_pin_needed(struct wps_registrar *reg, const u8 *uuid_e,
 
 
 static void wps_cb_reg_success(struct wps_registrar *reg, const u8 *mac_addr,
-			       const u8 *uuid_e)
+			       const u8 *uuid_e, const u8 *dev_pw,
+			       size_t dev_pw_len)
 {
 	if (reg->reg_success_cb == NULL)
 		return;
 
-	reg->reg_success_cb(reg->cb_ctx, mac_addr, uuid_e);
+	reg->reg_success_cb(reg->cb_ctx, mac_addr, uuid_e, dev_pw, dev_pw_len);
 }
 
 
@@ -2087,6 +2117,13 @@ static int wps_process_e_snonce2(struct wps_data *wps, const u8 *e_snonce2)
 	wps->wps_pin_revealed = 0;
 	wps_registrar_unlock_pin(wps->wps->registrar, wps->uuid_e);
 
+	/*
+	 * In case wildcard PIN is used and WPS handshake succeeds in the first
+	 * attempt, wps_registrar_unlock_pin() would not free the PIN, so make
+	 * sure the PIN gets invalidated here.
+	 */
+	wps_registrar_invalidate_pin(wps->wps->registrar, wps->uuid_e);
+
 	return 0;
 }
 
@@ -3031,11 +3068,13 @@ static enum wps_process_res wps_process_wsc_done(struct wps_data *wps,
 		wps->new_psk = NULL;
 	}
 
-	wps_cb_reg_success(wps->wps->registrar, wps->mac_addr_e, wps->uuid_e);
+	wps_cb_reg_success(wps->wps->registrar, wps->mac_addr_e, wps->uuid_e,
+			   wps->dev_password, wps->dev_password_len);
 
 	if (wps->pbc) {
 		wps_registrar_remove_pbc_session(wps->wps->registrar,
-						 wps->uuid_e);
+						 wps->uuid_e,
+						 wps->p2p_dev_addr);
 		wps_registrar_pbc_completed(wps->wps->registrar);
 	} else {
 		wps_registrar_pin_completed(wps->wps->registrar);
@@ -3137,7 +3176,6 @@ static void wps_registrar_set_selected_timeout(void *eloop_ctx,
 		   "unselect internal Registrar");
 	reg->selected_registrar = 0;
 	reg->pbc = 0;
-	wps_registrar_sel_registrar_changed_event(reg->wps);
 	wps_registrar_selected_registrar_changed(reg);
 }
 

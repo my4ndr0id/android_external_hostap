@@ -3,14 +3,8 @@
  * Copyright (c) 2003-2010, Jouni Malinen <j@w1.fi>
  * Copyright (c) 2011-2012, Code Aurora Forum. All rights reserved.
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- * Alternatively, this software may be distributed under the terms of BSD
- * license.
- *
- * See README and COPYING for more details.
+ * This software may be distributed under the terms of the BSD license.
+ * See README for more details.
  */
 
 #ifndef WPA_SUPPLICANT_I_H
@@ -37,7 +31,7 @@ struct scan_info;
 struct wpa_bss;
 struct wpa_scan_results;
 struct hostapd_hw_modes;
-struct wpa_scan_res;
+struct wpa_driver_associate_params;
 
 /*
  * Forward declarations of private structures used within the ctrl_iface
@@ -206,6 +200,12 @@ struct p2p_srv_upnp {
 	char *service;
 };
 
+struct wpa_freq_range {
+	unsigned int min;
+	unsigned int max;
+};
+
+
 /**
  * struct wpa_global - Internal, global data for all %wpa_supplicant interfaces
  *
@@ -230,6 +230,9 @@ struct wpa_global {
 #ifdef CONFIG_WFD
 	struct wfd_data *wfd;
 #endif
+
+	struct wpa_freq_range *p2p_disallow_freq;
+	unsigned int num_p2p_disallow_freq;
 };
 
 
@@ -290,6 +293,14 @@ struct wpa_supplicant {
 	void *drv_priv; /* private data used by driver_ops */
 	void *global_drv_priv;
 
+	u8 *bssid_filter;
+	size_t bssid_filter_count;
+
+	enum { WPA_SETBAND_AUTO, WPA_SETBAND_5G, WPA_SETBAND_2G } setband;
+
+	/* previous scan was wildcard when interleaving between
+	 * wildcard scans and specific SSID scan when max_ssids=1 */
+	int prev_scan_wildcard;
 	struct wpa_ssid *prev_scan_ssid; /* previously scanned SSID;
 					  * NULL = not yet initialized (start
 					  * with wildcard SSID)
@@ -330,6 +341,10 @@ struct wpa_supplicant {
 			     * previous association event */
 
 	struct scard_data *scard;
+#ifdef PCSC_FUNCS
+	char imsi[20];
+	int mnc_len;
+#endif /* PCSC_FUNCS */
 
 	unsigned char last_eapol_src[ETH_ALEN];
 
@@ -345,6 +360,13 @@ struct wpa_supplicant {
 	int normal_scans; /* normal scans run before sched_scan */
 
 	unsigned int drv_flags;
+
+	/*
+	 * A bitmap of supported protocols for probe response offload. See
+	 * struct wpa_driver_capa in driver.h
+	 */
+	unsigned int probe_resp_offloads;
+
 	int max_scan_ssids;
 	int max_sched_scan_ssids;
 	int sched_scan_supported;
@@ -454,7 +476,6 @@ struct wpa_supplicant {
 	int pending_join_wps_method;
 	int p2p_join_scan_count;
 	int force_long_sd;
-
 	u16 pending_pd_config_methods;
 	enum {
 		NORMAL_PD, AUTO_PD_GO_NEG, AUTO_PD_JOIN
@@ -485,14 +506,17 @@ struct wpa_supplicant {
 		P2P_GROUP_REMOVAL_UNKNOWN,
 		P2P_GROUP_REMOVAL_REQUESTED,
 		P2P_GROUP_REMOVAL_IDLE_TIMEOUT,
-		P2P_GROUP_REMOVAL_UNAVAILABLE
+		P2P_GROUP_REMOVAL_UNAVAILABLE,
+		P2P_GROUP_REMOVAL_GO_ENDING_SESSION
 	} removal_reason;
 
 	unsigned int p2p_cb_on_scan_complete:1;
 	unsigned int p2p_auto_join:1;
 	unsigned int p2p_auto_pd:1;
 	unsigned int p2p_persistent_group:1;
+	unsigned int p2p_fallback_to_go_neg:1;
 	unsigned int p2p_pd_before_go_neg:1;
+	int p2p_persistent_id;
 	int p2p_go_intent;
 	int p2p_connect_freq;
 	struct os_time p2p_auto_started;
@@ -505,6 +529,7 @@ struct wpa_supplicant {
 	struct wpa_ssid *connect_without_scan;
 
 	int after_wps;
+	int known_wps_freq;
 	unsigned int wps_freq;
 	int wps_fragment_size;
 	int auto_reconnect_disabled;
@@ -539,11 +564,16 @@ struct wpa_supplicant {
 
 
 /* wpa_supplicant.c */
+void wpa_supplicant_apply_ht_overrides(
+	struct wpa_supplicant *wpa_s, struct wpa_ssid *ssid,
+	struct wpa_driver_associate_params *params);
+
 int wpa_set_wep_keys(struct wpa_supplicant *wpa_s, struct wpa_ssid *ssid);
 
 int wpa_supplicant_reload_configuration(struct wpa_supplicant *wpa_s);
 
 const char * wpa_supplicant_state_txt(enum wpa_states state);
+int wpa_supplicant_update_mac_addr(struct wpa_supplicant *wpa_s);
 int wpa_supplicant_driver_init(struct wpa_supplicant *wpa_s);
 int wpa_supplicant_set_suites(struct wpa_supplicant *wpa_s,
 			      struct wpa_bss *bss, struct wpa_ssid *ssid,
@@ -582,6 +612,7 @@ int wpa_supplicant_set_bss_expiration_count(struct wpa_supplicant *wpa_s,
 int wpa_supplicant_set_debug_params(struct wpa_global *global,
 				    int debug_level, int debug_timestamp,
 				    int debug_show_keys);
+void free_hw_features(struct wpa_supplicant *wpa_s);
 
 void wpa_show_license(void);
 

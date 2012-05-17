@@ -1,15 +1,9 @@
 /*
- * hostapd - IEEE 802.11i-2004 / WPA Authenticator
- * Copyright (c) 2004-2009, Jouni Malinen <j@w1.fi>
+ * IEEE 802.11 RSN / WPA Authenticator
+ * Copyright (c) 2004-2011, Jouni Malinen <j@w1.fi>
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- * Alternatively, this software may be distributed under the terms of BSD
- * license.
- *
- * See README and COPYING for more details.
+ * This software may be distributed under the terms of the BSD license.
+ * See README for more details.
  */
 
 #include "utils/includes.h"
@@ -52,6 +46,7 @@ static const u32 dot11RSNAConfigGroupUpdateCount = 4;
 static const u32 dot11RSNAConfigPairwiseUpdateCount = 4;
 static const u32 eapol_key_timeout_first = 100; /* ms */
 static const u32 eapol_key_timeout_subseq = 1000; /* ms */
+static const u32 eapol_key_timeout_first_group = 500; /* ms */
 
 /* TODO: make these configurable */
 static const int dot11RSNAConfigPMKLifetime = 43200;
@@ -194,6 +189,7 @@ static void wpa_sta_disconnect(struct wpa_authenticator *wpa_auth,
 {
 	if (wpa_auth->cb.disconnect == NULL)
 		return;
+	wpa_printf(MSG_DEBUG, "wpa_sta_disconnect STA " MACSTR, MAC2STR(addr));
 	wpa_auth->cb.disconnect(wpa_auth->cb.ctx, addr,
 				WLAN_REASON_PREV_AUTH_NOT_VALID);
 }
@@ -645,18 +641,32 @@ static void wpa_request_new_ptk(struct wpa_state_machine *sm)
 }
 
 
-static int wpa_replay_counter_valid(struct wpa_state_machine *sm,
+static int wpa_replay_counter_valid(struct wpa_key_replay_counter *ctr,
 				    const u8 *replay_counter)
 {
 	int i;
 	for (i = 0; i < RSNA_MAX_EAPOL_RETRIES; i++) {
-		if (!sm->key_replay[i].valid)
+		if (!ctr[i].valid)
 			break;
-		if (os_memcmp(replay_counter, sm->key_replay[i].counter,
+		if (os_memcmp(replay_counter, ctr[i].counter,
 			      WPA_REPLAY_COUNTER_LEN) == 0)
 			return 1;
 	}
 	return 0;
+}
+
+
+static void wpa_replay_counter_mark_invalid(struct wpa_key_replay_counter *ctr,
+					    const u8 *replay_counter)
+{
+	int i;
+	for (i = 0; i < RSNA_MAX_EAPOL_RETRIES; i++) {
+		if (ctr[i].valid &&
+		    (replay_counter == NULL ||
+		     os_memcmp(replay_counter, ctr[i].counter,
+			       WPA_REPLAY_COUNTER_LEN) == 0))
+			ctr[i].valid = FALSE;
+	}
 }
 
 
@@ -779,7 +789,14 @@ void wpa_receive(struct wpa_authenticator *wpa_auth,
 	}
 
 	if (sm->wpa == WPA_VERSION_WPA2) {
-		if (key->type != EAPOL_KEY_TYPE_RSN) {
+		if (key->type == EAPOL_KEY_TYPE_WPA) {
+			/*
+			 * Some deployed station implementations seem to send
+			 * msg 4/4 with incorrect type value in WPA2 mode.
+			 */
+			wpa_printf(MSG_DEBUG, "Workaround: Allow EAPOL-Key "
+				   "with unexpected WPA type in RSN mode");
+		} else if (key->type != EAPOL_KEY_TYPE_RSN) {
 			wpa_printf(MSG_DEBUG, "Ignore EAPOL-Key with "
 				   "unexpected type %d in RSN mode",
 				   key->type);
@@ -866,11 +883,44 @@ void wpa_receive(struct wpa_authenticator *wpa_auth,
 	}
 
 	if (!(key_info & WPA_KEY_INFO_REQUEST) &&
-	    !wpa_replay_counter_valid(sm, key->replay_counter)) {
+	    !wpa_replay_counter_valid(sm->key_replay, key->replay_counter)) {
 		int i;
-		wpa_auth_vlogger(wpa_auth, sm->addr, LOGGER_INFO,
-				 "received EAPOL-Key %s with unexpected "
-				 "replay counter", msgtxt);
+
+		if (msg == PAIRWISE_2 &&
+		    wpa_replay_counter_valid(sm->prev_key_replay,
+					     key->replay_counter) &&
+		    sm->wpa_ptk_state == WPA_PTK_PTKINITNEGOTIATING &&
+		    os_memcmp(sm->SNonce, key->key_nonce, WPA_NONCE_LEN) != 0)
+		{
+			/*
+			 * Some supplicant implementations (e.g., Windows XP
+			 * WZC) update SNonce for each EAPOL-Key 2/4. This
+			 * breaks the workaround on accepting any of the
+			 * pending requests, so allow the SNonce to be updated
+			 * even if we have already sent out EAPOL-Key 3/4.
+			 */
+			wpa_auth_vlogger(wpa_auth, sm->addr, LOGGER_DEBUG,
+					 "Process SNonce update from STA "
+					 "based on retransmitted EAPOL-Key "
+					 "1/4");
+			sm->update_snonce = 1;
+			wpa_replay_counter_mark_invalid(sm->prev_key_replay,
+							key->replay_counter);
+			goto continue_processing;
+		}
+
+		if (msg == PAIRWISE_2 &&
+		    wpa_replay_counter_valid(sm->prev_key_replay,
+					     key->replay_counter) &&
+		    sm->wpa_ptk_state == WPA_PTK_PTKINITNEGOTIATING) {
+			wpa_auth_vlogger(wpa_auth, sm->addr, LOGGER_DEBUG,
+					 "ignore retransmitted EAPOL-Key %s - "
+					 "SNonce did not change", msgtxt);
+		} else {
+			wpa_auth_vlogger(wpa_auth, sm->addr, LOGGER_DEBUG,
+					 "received EAPOL-Key %s with "
+					 "unexpected replay counter", msgtxt);
+		}
 		for (i = 0; i < RSNA_MAX_EAPOL_RETRIES; i++) {
 			if (!sm->key_replay[i].valid)
 				break;
@@ -883,10 +933,13 @@ void wpa_receive(struct wpa_authenticator *wpa_auth,
 		return;
 	}
 
+continue_processing:
 	switch (msg) {
 	case PAIRWISE_2:
 		if (sm->wpa_ptk_state != WPA_PTK_PTKSTART &&
-		    sm->wpa_ptk_state != WPA_PTK_PTKCALCNEGOTIATING) {
+		    sm->wpa_ptk_state != WPA_PTK_PTKCALCNEGOTIATING &&
+		    (!sm->update_snonce ||
+		     sm->wpa_ptk_state != WPA_PTK_PTKINITNEGOTIATING)) {
 			wpa_auth_vlogger(wpa_auth, sm->addr, LOGGER_INFO,
 					 "received EAPOL-Key msg 2/4 in "
 					 "invalid state (%d) - dropped",
@@ -907,9 +960,7 @@ void wpa_receive(struct wpa_authenticator *wpa_auth,
 			wpa_printf(MSG_DEBUG, "WPA: Reject 4-way handshake to "
 				   "collect more entropy for random number "
 				   "generation");
-			sm->group->reject_4way_hs_for_entropy = FALSE;
 			random_mark_pool_ready();
-			sm->group->first_sta_seen = FALSE;
 			wpa_sta_disconnect(wpa_auth, sm->addr);
 			return;
 		}
@@ -1015,7 +1066,7 @@ void wpa_receive(struct wpa_authenticator *wpa_auth,
 	}
 
 	sm->MICVerified = FALSE;
-	if (sm->PTK_valid) {
+	if (sm->PTK_valid && !sm->update_snonce) {
 		if (wpa_verify_key_mic(&sm->PTK, data, data_len)) {
 			wpa_auth_logger(wpa_auth, sm->addr, LOGGER_INFO,
 					"received EAPOL-Key with invalid MIC");
@@ -1069,19 +1120,34 @@ void wpa_receive(struct wpa_authenticator *wpa_auth,
 			wpa_auth_logger(wpa_auth, sm->addr, LOGGER_INFO,
 					"received EAPOL-Key Request for GTK "
 					"rekeying");
-			/* FIX: why was this triggering PTK rekeying for the
-			 * STA that requested Group Key rekeying?? */
-			/* wpa_request_new_ptk(sta->wpa_sm); */
 			eloop_cancel_timeout(wpa_rekey_gtk, wpa_auth, NULL);
 			wpa_rekey_gtk(wpa_auth, NULL);
 		}
 	} else {
-		/* Do not allow the same key replay counter to be reused. This
-		 * does also invalidate all other pending replay counters if
-		 * retransmissions were used, i.e., we will only process one of
-		 * the pending replies and ignore rest if more than one is
-		 * received. */
-		sm->key_replay[0].valid = FALSE;
+		/* Do not allow the same key replay counter to be reused. */
+		wpa_replay_counter_mark_invalid(sm->key_replay,
+						key->replay_counter);
+
+		if (msg == PAIRWISE_2) {
+			/*
+			 * Maintain a copy of the pending EAPOL-Key frames in
+			 * case the EAPOL-Key frame was retransmitted. This is
+			 * needed to allow EAPOL-Key msg 2/4 reply to another
+			 * pending msg 1/4 to update the SNonce to work around
+			 * unexpected supplicant behavior.
+			 */
+			os_memcpy(sm->prev_key_replay, sm->key_replay,
+				  sizeof(sm->key_replay));
+		} else {
+			os_memset(sm->prev_key_replay, 0,
+				  sizeof(sm->prev_key_replay));
+		}
+
+		/*
+		 * Make sure old valid counters are not accepted anymore and
+		 * do not get copied again.
+		 */
+		wpa_replay_counter_mark_invalid(sm->key_replay, NULL);
 	}
 
 #ifdef CONFIG_PEERKEY
@@ -1335,7 +1401,8 @@ static void wpa_send_eapol(struct wpa_authenticator *wpa_auth,
 
 	ctr = pairwise ? sm->TimeoutCtr : sm->GTimeoutCtr;
 	if (ctr == 1 && wpa_auth->conf.tx_status)
-		timeout_ms = eapol_key_timeout_first;
+		timeout_ms = pairwise ? eapol_key_timeout_first :
+			eapol_key_timeout_first_group;
 	else
 		timeout_ms = eapol_key_timeout_subseq;
 	if (pairwise && ctr == 1 && !(key_info & WPA_KEY_INFO_MIC))
@@ -1539,9 +1606,11 @@ SM_STATE(WPA_PTK, AUTHENTICATION)
 }
 
 
-static void wpa_group_first_station(struct wpa_authenticator *wpa_auth,
-				    struct wpa_group *group)
+static void wpa_group_ensure_init(struct wpa_authenticator *wpa_auth,
+				  struct wpa_group *group)
 {
+	if (group->first_sta_seen)
+		return;
 	/*
 	 * System has run bit further than at the time hostapd was started
 	 * potentially very early during boot up. This provides better chances
@@ -1555,7 +1624,11 @@ static void wpa_group_first_station(struct wpa_authenticator *wpa_auth,
 		wpa_printf(MSG_INFO, "WPA: Not enough entropy in random pool "
 			   "to proceed - reject first 4-way handshake");
 		group->reject_4way_hs_for_entropy = TRUE;
+	} else {
+		group->first_sta_seen = TRUE;
+		group->reject_4way_hs_for_entropy = FALSE;
 	}
+
 	wpa_group_init_gmk_and_counter(wpa_auth, group);
 	wpa_gtk_update(wpa_auth, group);
 	wpa_group_config_group_keys(wpa_auth, group);
@@ -1566,15 +1639,25 @@ SM_STATE(WPA_PTK, AUTHENTICATION2)
 {
 	SM_ENTRY_MA(WPA_PTK, AUTHENTICATION2, wpa_ptk);
 
-	if (!sm->group->first_sta_seen) {
-		wpa_group_first_station(sm->wpa_auth, sm->group);
-		sm->group->first_sta_seen = TRUE;
-	}
+	wpa_group_ensure_init(sm->wpa_auth, sm->group);
 
-	os_memcpy(sm->ANonce, sm->group->Counter, WPA_NONCE_LEN);
+	/*
+	 * Definition of ANonce selection in IEEE Std 802.11i-2004 is somewhat
+	 * ambiguous. The Authenticator state machine uses a counter that is
+	 * incremented by one for each 4-way handshake. However, the security
+	 * analysis of 4-way handshake points out that unpredictable nonces
+	 * help in preventing precomputation attacks. Instead of the state
+	 * machine definition, use an unpredictable nonce value here to provide
+	 * stronger protection against potential precomputation attacks.
+	 */
+	if (random_get_bytes(sm->ANonce, WPA_NONCE_LEN)) {
+		wpa_printf(MSG_ERROR, "WPA: Failed to get random data for "
+			   "ANonce.");
+		wpa_sta_disconnect(sm->wpa_auth, sm->addr);
+		return;
+	}
 	wpa_hexdump(MSG_DEBUG, "WPA: Assign ANonce", sm->ANonce,
 		    WPA_NONCE_LEN);
-	inc_byte_array(sm->group->Counter, WPA_NONCE_LEN);
 	sm->ReAuthenticationRequest = FALSE;
 	/* IEEE 802.11i does not clear TimeoutCtr here, but this is more
 	 * logical place than INITIALIZE since AUTHENTICATION2 can be
@@ -1713,6 +1796,7 @@ SM_STATE(WPA_PTK, PTKCALCNEGOTIATING)
 
 	SM_ENTRY_MA(WPA_PTK, PTKCALCNEGOTIATING, wpa_ptk);
 	sm->EAPOLKeyReceived = FALSE;
+	sm->update_snonce = FALSE;
 
 	/* WPA with IEEE 802.1X: use the derived PMK from EAP
 	 * WPA-PSK: iterate through possible PSKs and select the one matching
@@ -2132,8 +2216,10 @@ SM_STEP(WPA_PTK)
 		SM_ENTER(WPA_PTK, PTKINITNEGOTIATING);
 		break;
 	case WPA_PTK_PTKINITNEGOTIATING:
-		if (sm->EAPOLKeyReceived && !sm->EAPOLKeyRequest &&
-		    sm->EAPOLKeyPairwise && sm->MICVerified)
+		if (sm->update_snonce)
+			SM_ENTER(WPA_PTK, PTKCALCNEGOTIATING);
+		else if (sm->EAPOLKeyReceived && !sm->EAPOLKeyRequest &&
+			 sm->EAPOLKeyPairwise && sm->MICVerified)
 			SM_ENTER(WPA_PTK, PTKINITDONE);
 		else if (sm->TimeoutCtr >
 			 (int) dot11RSNAConfigPairwiseUpdateCount) {

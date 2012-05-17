@@ -3,14 +3,8 @@
  * Copyright (c) 2003-2009, Jouni Malinen <j@w1.fi>
  * Copyright (c) 2011, Code Aurora Forum. All rights reserved.
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- * Alternatively, this software may be distributed under the terms of BSD
- * license.
- *
- * See README and COPYING for more details.
+ * This software may be distributed under the terms of the BSD license.
+ * See README for more details.
  */
 
 #include "utils/includes.h"
@@ -91,10 +85,6 @@ void hostapd_config_defaults_bss(struct hostapd_bss_config *bss)
 	/* Set to -1 as defaults depends on HT in setup */
 	bss->wmm_enabled = -1;
 
-#ifdef ANDROID_QCOM_P2P_PATCH
-        bss->wmm_uapsd = 1;
-#endif /* ANDROID_QCOM_P2P_PATCH */
-
 #ifdef CONFIG_IEEE80211R
 	bss->ft_over_ds = 1;
 #endif /* CONFIG_IEEE80211R */
@@ -112,17 +102,10 @@ struct hostapd_config * hostapd_config_defaults(void)
 		{ aCWmin, aCWmax, 7, 0, 0 }; /* background traffic */
 	const struct hostapd_wmm_ac_params ac_be =
 		{ aCWmin, aCWmax, 3, 0, 0 }; /* best effort traffic */
-#ifdef ANDROID_QCOM_P2P_PATCH
-	const struct hostapd_wmm_ac_params ac_vi = /* video traffic */
-		{ aCWmin - 1, aCWmin, 2, 3000 / 32, 0 };
-	const struct hostapd_wmm_ac_params ac_vo = /* voice traffic */
-		{ aCWmin - 2, aCWmin - 1, 2, 1500 / 32, 0 };
-#else
 	const struct hostapd_wmm_ac_params ac_vi = /* video traffic */
 		{ aCWmin - 1, aCWmin, 2, 3000 / 32, 1 };
 	const struct hostapd_wmm_ac_params ac_vo = /* voice traffic */
 		{ aCWmin - 2, aCWmin - 1, 2, 1500 / 32, 1 };
-#endif
 	const struct hostapd_tx_queue_params txq_bk =
 		{ 7, ecw2cw(aCWmin), ecw2cw(aCWmax), 0 };
 	const struct hostapd_tx_queue_params txq_be =
@@ -174,15 +157,11 @@ struct hostapd_config * hostapd_config_defaults(void)
 
 	conf->ht_capab = HT_CAP_INFO_SMPS_DISABLED;
 
-#ifdef ANDROID_QCOM_P2P_PATCH
-        /* Enable HT and short premable */
-        conf->preamble = SHORT_PREAMBLE;
-        conf->ieee80211n = 1;
+	conf->ieee80211n = 1;
 
-        /* Enable ieee80211d and set US as default country */
-        conf->ieee80211d = 1;
-        os_memcpy(conf->country, "US ", 3);
-#endif /* ANDROID_QCOM_P2P_PATCH */
+	/* Enable ieee80211d and set US as default country */
+	conf->ieee80211d = 1;
+	os_memcpy(conf->country, "US ", 3);
 
 	return conf;
 }
@@ -493,6 +472,11 @@ static void hostapd_config_free_bss(struct hostapd_bss_config *conf)
 #endif /* CONFIG_WPS */
 
 	os_free(conf->roaming_consortium);
+	os_free(conf->venue_name);
+
+#ifdef CONFIG_RADIUS_TEST
+	os_free(conf->dump_msk_file);
+#endif /* CONFIG_RADIUS_TEST */
 }
 
 

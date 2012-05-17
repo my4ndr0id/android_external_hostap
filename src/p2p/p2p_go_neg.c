@@ -2,14 +2,8 @@
  * Wi-Fi Direct - P2P Group Owner Negotiation
  * Copyright (c) 2009-2010, Atheros Communications
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- * Alternatively, this software may be distributed under the terms of BSD
- * license.
- *
- * See README and COPYING for more details.
+ * This software may be distributed under the terms of the BSD license.
+ * See README for more details.
  */
 
 #include "includes.h"
@@ -104,7 +98,7 @@ static int p2p_peer_channels(struct p2p_data *p2p, struct p2p_device *dev,
 }
 
 
-static u16 p2p_wps_method_pw_id(enum p2p_wps_method wps_method)
+u16 p2p_wps_method_pw_id(enum p2p_wps_method wps_method)
 {
 	switch (wps_method) {
 	case WPS_PIN_DISPLAY:
@@ -195,20 +189,20 @@ int p2p_connect_send(struct p2p_data *p2p, struct p2p_device *dev)
 	int freq;
 
 	if (dev->flags & P2P_DEV_PD_BEFORE_GO_NEG) {
-		u16 config_method;
-		wpa_msg(p2p->cfg->msg_ctx, MSG_DEBUG,
-			"P2P: Use PD-before-GO-Neg workaround for " MACSTR,
-			MAC2STR(dev->info.p2p_device_addr));
-		if (dev->wps_method == WPS_PIN_DISPLAY)
-			config_method = WPS_CONFIG_KEYPAD;
-		else if (dev->wps_method == WPS_PIN_KEYPAD)
-			config_method = WPS_CONFIG_DISPLAY;
-		else if (dev->wps_method == WPS_PBC)
-			config_method = WPS_CONFIG_PUSHBUTTON;
-		else
-			return -1;
-		return p2p_prov_disc_req(p2p, dev->info.p2p_device_addr,
-					 config_method, 0, 0);
+	        u16 config_method;
+	        wpa_msg(p2p->cfg->msg_ctx, MSG_DEBUG,
+	                "P2P: Use PD-before-GO-Neg workaround for " MACSTR,
+	                MAC2STR(dev->info.p2p_device_addr));
+	        if (dev->wps_method == WPS_PIN_DISPLAY)
+	                config_method = WPS_CONFIG_KEYPAD;
+	        else if (dev->wps_method == WPS_PIN_KEYPAD)
+	                config_method = WPS_CONFIG_DISPLAY;
+	        else if (dev->wps_method == WPS_PBC)
+	                config_method = WPS_CONFIG_PUSHBUTTON;
+	        else
+	                return -1;
+	        return p2p_prov_disc_req(p2p, dev->info.p2p_device_addr,
+	                                 config_method, 0, 0);
 	}
 
 	freq = dev->listen_freq > 0 ? dev->listen_freq : dev->oper_freq;
@@ -519,15 +513,7 @@ void p2p_process_go_neg_req(struct p2p_data *p2p, const u8 *sa,
 		}
 
 		if (dev->go_neg_req_sent &&
-#ifdef ANDROID_BRCM_P2P_PATCH 
-		/* P2P_ADDR: compare against the p2p device address. The own mac 
-		address may not not be the actual p2p device address, if you 
-		are using a virtual interface.
-		*/
-		    os_memcmp(sa, p2p->cfg->p2p_dev_addr, ETH_ALEN) > 0) {
-#else
 		    os_memcmp(sa, p2p->cfg->dev_addr, ETH_ALEN) > 0) {
-#endif
 			wpa_msg(p2p->cfg->msg_ctx, MSG_DEBUG,
 				"P2P: Do not reply since peer has higher "
 				"address and GO Neg Request already sent");

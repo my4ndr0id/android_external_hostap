@@ -2,14 +2,8 @@
  * Wi-Fi Direct - P2P service discovery
  * Copyright (c) 2009, Atheros Communications
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- * Alternatively, this software may be distributed under the terms of BSD
- * license.
- *
- * See README and COPYING for more details.
+ * This software may be distributed under the terms of the BSD license.
+ * See README for more details.
  */
 
 #include "includes.h"
@@ -389,11 +383,7 @@ void p2p_sd_response(struct p2p_data *p2p, int freq, const u8 *dst,
 
 	p2p->pending_action_state = P2P_NO_PENDING_ACTION;
 	if (p2p_send_action(p2p, freq, dst, p2p->cfg->dev_addr,
-		#ifdef ANDROID_BRCM_P2P_PATCH
-			   p2p->cfg->p2p_dev_addr,
-		#else
 			    p2p->cfg->dev_addr,
-		#endif
 			    wpabuf_head(resp), wpabuf_len(resp), 200) < 0)
 		wpa_msg(p2p->cfg->msg_ctx, MSG_DEBUG,
 			"P2P: Failed to send Action frame");
@@ -870,6 +860,12 @@ void * p2p_sd_request(struct p2p_data *p2p, const u8 *dst,
 	q->next = p2p->sd_queries;
 	p2p->sd_queries = q;
 	wpa_msg(p2p->cfg->msg_ctx, MSG_DEBUG, "P2P: Added SD Query %p", q);
+
+	if (dst == NULL) {
+		struct p2p_device *dev;
+		dl_list_for_each(dev, &p2p->devices, struct p2p_device, list)
+			dev->flags &= ~P2P_DEV_SD_INFO;
+	}
 
 	return q;
 }

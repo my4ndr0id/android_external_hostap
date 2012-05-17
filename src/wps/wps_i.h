@@ -2,14 +2,8 @@
  * Wi-Fi Protected Setup - internal definitions
  * Copyright (c) 2008-2009, Jouni Malinen <j@w1.fi>
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- * Alternatively, this software may be distributed under the terms of BSD
- * license.
- *
- * See README and COPYING for more details.
+ * This software may be distributed under the terms of the BSD license.
+ * See README for more details.
  */
 
 #ifndef WPS_I_H
@@ -228,7 +222,6 @@ void wps_success_event(struct wps_context *wps);
 void wps_pwd_auth_fail_event(struct wps_context *wps, int enrollee, int part);
 void wps_pbc_overlap_event(struct wps_context *wps);
 void wps_pbc_timeout_event(struct wps_context *wps);
-void wps_registrar_sel_registrar_changed_event(struct wps_context *wps);
 
 extern struct oob_device_data oob_ufd_device_data;
 extern struct oob_device_data oob_nfc_device_data;

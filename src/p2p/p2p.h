@@ -2,14 +2,8 @@
  * Wi-Fi Direct - P2P module
  * Copyright (c) 2009-2010, Atheros Communications
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- * Alternatively, this software may be distributed under the terms of BSD
- * license.
- *
- * See README and COPYING for more details.
+ * This software may be distributed under the terms of the BSD license.
+ * See README for more details.
  */
 
 #ifndef P2P_H
@@ -295,17 +289,6 @@ struct p2p_config {
 	 */
 	u8 dev_addr[ETH_ALEN];
 
-#ifdef ANDROID_BRCM_P2P_PATCH
-	/**
-	 * p2p_dev_addr - P2P Device Address
-	 *
-	 * Holds the p2p device address. If the driver uses primary mac address
-	 * for p2p operations, then this will hold the same value as that of 
-	 * dev_addr.
-	 */
-	u8 p2p_dev_addr[ETH_ALEN];
-#endif
-
 	/**
 	 * dev_name - Device Name
 	 */
@@ -370,6 +353,8 @@ struct p2p_config {
 	 * @freq: Specific frequency (MHz) to scan or 0 for no restriction
 	 * @num_req_dev_types: Number of requested device types
 	 * @req_dev_types: Array containing requested device types
+	 * @dev_id: Device ID to search for or %NULL to find all devices
+	 * @pw_id: Device Password ID
 	 * Returns: 0 on success, -1 on failure
 	 *
 	 * This callback function is used to request a P2P scan or search
@@ -393,7 +378,7 @@ struct p2p_config {
 	 */
 	int (*p2p_scan)(void *ctx, enum p2p_scan_type type, int freq,
 			unsigned int num_req_dev_types,
-			const u8 *req_dev_types);
+			const u8 *req_dev_types, const u8 *dev_id, u16 pw_id);
 
 	/**
 	 * send_probe_resp - Transmit a Probe Response frame
@@ -605,6 +590,8 @@ struct p2p_config {
 	 * @supp_config_methods: Supported configuration Methods
 	 * @dev_capab: Device Capabilities
 	 * @group_capab: Group Capabilities
+	 * @group_id: P2P Group ID (or %NULL if not included)
+	 * @group_id_len: Length of P2P Group ID
 	 *
 	 * This callback is used to indicate reception of a Provision Discovery
 	 * Request frame that the P2P module accepted.
@@ -612,7 +599,8 @@ struct p2p_config {
 	void (*prov_disc_req)(void *ctx, const u8 *peer, u16 config_methods,
 			      const u8 *dev_addr, const u8 *pri_dev_type,
 			      const char *dev_name, u16 supp_config_methods,
-			      u8 dev_capab, u8 group_capab);
+			      u8 dev_capab, u8 group_capab,
+			      const u8 *group_id, size_t group_id_len);
 
 	/**
 	 * prov_disc_resp - Callback on Provisiong Discovery Response
@@ -826,11 +814,13 @@ enum p2p_discovery_type {
  * @req_dev_types: Requested device types array, must be an array
  *	containing num_req_dev_types * WPS_DEV_TYPE_LEN bytes; %NULL if no
  *	requested device types.
+ * @dev_id: Device ID to search for or %NULL to find all devices
  * Returns: 0 on success, -1 on failure
  */
 int p2p_find(struct p2p_data *p2p, unsigned int timeout,
 	     enum p2p_discovery_type type,
-	     unsigned int num_req_dev_types, const u8 *req_dev_types);
+	     unsigned int num_req_dev_types, const u8 *req_dev_types,
+	     const u8 *dev_id);
 
 /**
  * p2p_stop_find - Stop P2P Find (Device Discovery)
@@ -872,15 +862,16 @@ int p2p_listen(struct p2p_data *p2p, unsigned int timeout);
  * @persistent_group: Whether to create a persistent group (0 = no, 1 =
  * persistent group without persistent reconnect, 2 = persistent group with
  * persistent reconnect)
- * @pd_before_go_neg: Whether to send Provision Discovery prior to GO
- *	Negotiation as an interoperability workaround when initiating group
- *	formation
+ * @force_ssid: Forced SSID for the group if we become GO or %NULL to generate
+ *	a new SSID
+ * @force_ssid_len: Length of $force_ssid buffer
  * Returns: 0 on success, -1 on failure
  */
 int p2p_connect(struct p2p_data *p2p, const u8 *peer_addr,
 		enum p2p_wps_method wps_method,
 		int go_intent, const u8 *own_interface_addr,
 		unsigned int force_freq, int persistent_group,
+		const u8 *force_ssid, size_t force_ssid_len,
 		int pd_before_go_neg);
 
 /**
@@ -894,6 +885,9 @@ int p2p_connect(struct p2p_data *p2p, const u8 *peer_addr,
  * @persistent_group: Whether to create a persistent group (0 = no, 1 =
  * persistent group without persistent reconnect, 2 = persistent group with
  * persistent reconnect)
+ * @force_ssid: Forced SSID for the group if we become GO or %NULL to generate
+ *	a new SSID
+ * @force_ssid_len: Length of $force_ssid buffer
  * Returns: 0 on success, -1 on failure
  *
  * This is like p2p_connect(), but the actual group negotiation is not
@@ -902,7 +896,8 @@ int p2p_connect(struct p2p_data *p2p, const u8 *peer_addr,
 int p2p_authorize(struct p2p_data *p2p, const u8 *peer_addr,
 		  enum p2p_wps_method wps_method,
 		  int go_intent, const u8 *own_interface_addr,
-		  unsigned int force_freq, int persistent_group);
+		  unsigned int force_freq, int persistent_group,
+		  const u8 *force_ssid, size_t force_ssid_len);
 
 /**
  * p2p_reject - Reject peer device (explicitly block connection attempts)
@@ -930,7 +925,7 @@ int p2p_reject(struct p2p_data *p2p, const u8 *peer_addr);
  * indicated with the p2p_config::prov_disc_resp() callback.
  */
 int p2p_prov_disc_req(struct p2p_data *p2p, const u8 *peer_addr,
-			u16 config_methods, int join, int force_freq);
+		      u16 config_methods, int join, int force_freq);
 
 /**
  * p2p_sd_request - Schedule a service discovery query
@@ -1235,6 +1230,16 @@ struct p2p_group_config {
 	unsigned int max_clients;
 
 	/**
+	 * ssid - Group SSID
+	 */
+	u8 ssid[32];
+
+	/**
+	 * ssid_len - Length of SSID
+	 */
+	size_t ssid_len;
+
+	/**
 	 * cb_ctx - Context to use with callback functions
 	 */
 	void *cb_ctx;
@@ -1345,6 +1350,11 @@ int p2p_group_notif_noa(struct p2p_group *group, const u8 *noa,
 int p2p_group_match_dev_type(struct p2p_group *group, struct wpabuf *wps);
 
 /**
+ * p2p_group_match_dev_id - Match P2P Device Address in group with requested device id
+ */
+int p2p_group_match_dev_id(struct p2p_group *group, struct wpabuf *p2p);
+
+/**
  * p2p_group_go_discover - Send GO Discoverability Request to a group client
  * @group: P2P group context from p2p_group_init()
  * Returns: 0 on success (frame scheduled); -1 if client was not found
@@ -1406,8 +1416,9 @@ int p2p_assoc_req_ie(struct p2p_data *p2p, const u8 *bssid, u8 *buf,
  * p2p_scan_ie - Build P2P IE for Probe Request
  * @p2p: P2P module context from p2p_init()
  * @ies: Buffer for writing P2P IE
+ * @dev_id: Device ID to search for or %NULL for any
  */
-void p2p_scan_ie(struct p2p_data *p2p, struct wpabuf *ies);
+void p2p_scan_ie(struct p2p_data *p2p, struct wpabuf *ies, const u8 *dev_id);
 
 /**
  * p2p_scan_ie_buf_len - Get maximum buffer length needed for p2p_scan_ie
@@ -1446,16 +1457,36 @@ int p2p_get_cross_connect_disallowed(const struct wpabuf *p2p_ie);
 const u8 * p2p_get_go_dev_addr(const struct wpabuf *p2p_ie);
 
 /**
- * p2p_get_peer_info - Get P2P peer information in text format
+ * p2p_get_peer_info - Get P2P peer information
  * @p2p: P2P module context from p2p_init()
  * @addr: P2P Device Address of the peer or %NULL to indicate the first peer
  * @next: Whether to select the peer entry following the one indicated by addr
+ * Returns: Pointer to peer info or %NULL if not found
+ */
+const struct p2p_peer_info * p2p_get_peer_info(struct p2p_data *p2p,
+					       const u8 *addr, int next);
+
+/**
+ * p2p_get_peer_info_txt - Get internal P2P peer information in text format
+ * @info: Pointer to P2P peer info from p2p_get_peer_info()
  * @buf: Buffer for returning text
  * @buflen: Maximum buffer length
  * Returns: Number of octets written to the buffer or -1 on failure
+ *
+ * Note: This information is internal to the P2P module and subject to change.
+ * As such, this should not really be used by external programs for purposes
+ * other than debugging.
  */
-int p2p_get_peer_info(struct p2p_data *p2p, const u8 *addr, int next,
-		      char *buf, size_t buflen);
+int p2p_get_peer_info_txt(const struct p2p_peer_info *info,
+			  char *buf, size_t buflen);
+
+/**
+ * p2p_peer_known - Check whether P2P peer is known
+ * @p2p: P2P module context from p2p_init()
+ * @addr: P2P Device Address of the peer
+ * Returns: 1 if the specified device is in the P2P peer table or 0 if not
+ */
+int p2p_peer_known(struct p2p_data *p2p, const u8 *addr);
 
 /**
  * p2p_set_client_discoverability - Set client discoverability capability
@@ -1469,7 +1500,7 @@ int p2p_get_peer_info(struct p2p_data *p2p, const u8 *addr, int next,
 void p2p_set_client_discoverability(struct p2p_data *p2p, int enabled);
 
 /**
- * p2p_set_manageD_oper - Set managed P2P Device operations capability
+ * p2p_set_managed_oper - Set managed P2P Device operations capability
  * @p2p: P2P module context from p2p_init()
  * @enabled: Whether managed P2P Device operations will be enabled
  */
@@ -1609,6 +1640,8 @@ int p2p_in_progress(struct p2p_data *p2p);
  * Returns: 0 if P2P module is idle or 1 if an operation was started
  */
 int p2p_other_scan_completed(struct p2p_data *p2p);
+
+const char * p2p_wps_method_text(enum p2p_wps_method method);
 
 #ifdef CONFIG_WFD
 /**

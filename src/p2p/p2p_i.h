@@ -2,14 +2,8 @@
  * P2P - Internal definitions for P2P module
  * Copyright (c) 2009-2010, Atheros Communications
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- * Alternatively, this software may be distributed under the terms of BSD
- * license.
- *
- * See README and COPYING for more details.
+ * This software may be distributed under the terms of the BSD license.
+ * See README for more details.
  */
 
 #ifndef P2P_I_H
@@ -20,8 +14,6 @@
 #ifdef CONFIG_WFD
 #include "wfd/wfd.h"
 #endif
-
-/* TODO: add removal of expired P2P device entries */
 
 enum p2p_go_state {
 	UNKNOWN_GO,
@@ -76,7 +68,7 @@ struct p2p_device {
 	size_t oper_ssid_len;
 
 	/**
-	 * req_config_methods - Pending provisioning discovery methods
+	 * req_config_methods - Pending provision discovery methods
 	 */
 	u16 req_config_methods;
 
@@ -391,6 +383,8 @@ struct p2p_data {
 	/* Requested device types for find/search */
 	unsigned int num_req_dev_types;
 	u8 *req_dev_types;
+	u8 *find_dev_id;
+	u8 find_dev_id_buf[ETH_ALEN];
 
 	struct p2p_group **groups;
 	size_t num_groups;
@@ -570,6 +564,8 @@ const u8 * p2p_group_get_interface_addr(struct p2p_group *group);
 u8 p2p_group_presence_req(struct p2p_group *group,
 			  const u8 *client_interface_addr,
 			  const u8 *noa, size_t noa_len);
+int p2p_group_is_group_id_match(struct p2p_group *group, const u8 *group_id,
+				size_t group_id_len);
 
 
 void p2p_buf_add_action_hdr(struct wpabuf *buf, u8 subtype, u8 dialog_token);
@@ -601,7 +597,7 @@ void p2p_buf_add_noa(struct wpabuf *buf, u8 noa_index, u8 opp_ps, u8 ctwindow,
 void p2p_buf_add_ext_listen_timing(struct wpabuf *buf, u16 period,
 				   u16 interval);
 void p2p_buf_add_p2p_interface(struct wpabuf *buf, struct p2p_data *p2p);
-void p2p_build_wps_ie(struct p2p_data *p2p, struct wpabuf *buf, u16 pw_id,
+void p2p_build_wps_ie(struct p2p_data *p2p, struct wpabuf *buf, int pw_id,
 		      int all_attr);
 
 /* p2p_sd.c */
@@ -629,6 +625,7 @@ void p2p_process_go_neg_resp(struct p2p_data *p2p, const u8 *sa,
 void p2p_process_go_neg_conf(struct p2p_data *p2p, const u8 *sa,
 			     const u8 *data, size_t len);
 int p2p_connect_send(struct p2p_data *p2p, struct p2p_device *dev);
+u16 p2p_wps_method_pw_id(enum p2p_wps_method wps_method);
 
 /* p2p_pd.c */
 void p2p_process_prov_disc_req(struct p2p_data *p2p, const u8 *sa,
@@ -636,7 +633,7 @@ void p2p_process_prov_disc_req(struct p2p_data *p2p, const u8 *sa,
 void p2p_process_prov_disc_resp(struct p2p_data *p2p, const u8 *sa,
 				const u8 *data, size_t len);
 int p2p_send_prov_disc_req(struct p2p_data *p2p, struct p2p_device *dev,
-				int join, int force_freq);
+			   int join, int force_freq);
 void p2p_reset_pending_pd(struct p2p_data *p2p);
 
 /* p2p_invitation.c */
@@ -673,7 +670,7 @@ struct p2p_device * p2p_add_dev_from_go_neg_req(struct p2p_data *p2p,
 void p2p_add_dev_info(struct p2p_data *p2p, const u8 *addr,
 		      struct p2p_device *dev, struct p2p_message *msg);
 int p2p_add_device(struct p2p_data *p2p, const u8 *addr, int freq, int level,
-			const u8 *ies, size_t ies_len, int scan_res);
+		   const u8 *ies, size_t ies_len);
 struct p2p_device * p2p_get_device(struct p2p_data *p2p, const u8 *addr);
 struct p2p_device * p2p_get_device_interface(struct p2p_data *p2p,
 					     const u8 *addr);

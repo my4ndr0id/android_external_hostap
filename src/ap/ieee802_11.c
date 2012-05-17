@@ -1,15 +1,9 @@
 /*
  * hostapd / IEEE 802.11 Management
- * Copyright (c) 2002-2011, Jouni Malinen <j@w1.fi>
+ * Copyright (c) 2002-2012, Jouni Malinen <j@w1.fi>
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- * Alternatively, this software may be distributed under the terms of BSD
- * license.
- *
- * See README and COPYING for more details.
+ * This software may be distributed under the terms of the BSD license.
+ * See README for more details.
  */
 
 #include "utils/includes.h"
@@ -313,6 +307,8 @@ static void handle_auth(struct hostapd_data *hapd,
 	const u8 *challenge = NULL;
 	u32 session_timeout, acct_interim_interval;
 	int vlan_id = 0;
+	u8 psk[PMK_LEN];
+	int has_psk = 0;
 	u8 resp_ies[2 + WLAN_AUTH_CHALLENGE_LEN];
 	size_t resp_ies_len = 0;
 
@@ -375,7 +371,9 @@ static void handle_auth(struct hostapd_data *hapd,
 
 	res = hostapd_allowed_address(hapd, mgmt->sa, (u8 *) mgmt, len,
 				      &session_timeout,
-				      &acct_interim_interval, &vlan_id);
+				      &acct_interim_interval, &vlan_id,
+				      psk, &has_psk);
+
 	if (res == HOSTAPD_ACL_REJECT) {
 		printf("Station " MACSTR " not allowed to authenticate.\n",
 		       MAC2STR(mgmt->sa));
@@ -411,6 +409,16 @@ static void handle_auth(struct hostapd_data *hapd,
 		sta->vlan_id = vlan_id;
 		hostapd_logger(hapd, sta->addr, HOSTAPD_MODULE_RADIUS,
 			       HOSTAPD_LEVEL_INFO, "VLAN ID %d", sta->vlan_id);
+	}
+
+	if (has_psk && hapd->conf->wpa_psk_radius != PSK_RADIUS_IGNORED) {
+		os_free(sta->psk);
+		sta->psk = os_malloc(PMK_LEN);
+		if (sta->psk)
+			os_memcpy(sta->psk, psk, PMK_LEN);
+	} else {
+		os_free(sta->psk);
+		sta->psk = NULL;
 	}
 
 	sta->flags &= ~WLAN_STA_PREAUTH;
@@ -537,15 +545,22 @@ static u16 check_wmm(struct hostapd_data *hapd, struct sta_info *sta,
 		     const u8 *wmm_ie, size_t wmm_ie_len)
 {
 	sta->flags &= ~WLAN_STA_WMM;
+	sta->qosinfo = 0;
 	if (wmm_ie && hapd->conf->wmm_enabled) {
-		if (hostapd_eid_wmm_valid(hapd, wmm_ie, wmm_ie_len))
+		struct wmm_information_element *wmm;
+
+		if (!hostapd_eid_wmm_valid(hapd, wmm_ie, wmm_ie_len)) {
 			hostapd_logger(hapd, sta->addr,
 				       HOSTAPD_MODULE_WPA,
 				       HOSTAPD_LEVEL_DEBUG,
 				       "invalid WMM element in association "
 				       "request");
-		else
-			sta->flags |= WLAN_STA_WMM;
+			return WLAN_STATUS_UNSPECIFIED_FAILURE;
+		}
+
+		sta->flags |= WLAN_STA_WMM;
+		wmm = (struct wmm_information_element *) wmm_ie;
+		sta->qosinfo = wmm->qos_info;
 	}
 	return WLAN_STATUS_SUCCESS;
 }
@@ -1364,6 +1379,11 @@ void ieee802_11_mgmt(struct hostapd_data *hapd, const u8 *buf, size_t len,
 		mgmt->bssid[4] == 0xff && mgmt->bssid[5] == 0xff;
 
 	if (!broadcast &&
+#ifdef CONFIG_P2P
+	    /* Invitation responses can be sent with the peer MAC as BSSID */
+	    !((hapd->conf->p2p & P2P_GROUP_OWNER) &&
+	      stype == WLAN_FC_STYPE_ACTION) &&
+#endif /* CONFIG_P2P */
 	    os_memcmp(mgmt->bssid, hapd->own_addr, ETH_ALEN) != 0) {
 		printf("MGMT: BSSID=" MACSTR " not our address\n",
 		       MAC2STR(mgmt->bssid));
@@ -1543,7 +1563,7 @@ static void handle_assoc_cb(struct hostapd_data *hapd,
 			    sta->supported_rates, sta->supported_rates_len,
 			    sta->listen_interval,
 			    sta->flags & WLAN_STA_HT ? &ht_cap : NULL,
-			    sta->flags)) {
+			    sta->flags, sta->qosinfo)) {
 		hostapd_logger(hapd, sta->addr, HOSTAPD_MODULE_IEEE80211,
 			       HOSTAPD_LEVEL_NOTICE,
 			       "Could not add STA to kernel driver");
@@ -1718,7 +1738,7 @@ void hostapd_tx_status(struct hostapd_data *hapd, const u8 *addr,
 				break;
 		}
 	}
-	if (sta == NULL)
+	if (sta == NULL || !(sta->flags & WLAN_STA_ASSOC))
 		return;
 	if (sta->flags & WLAN_STA_PENDING_POLL) {
 		wpa_printf(MSG_DEBUG, "STA " MACSTR " %s pending "
@@ -1748,8 +1768,12 @@ void hostapd_eapol_tx_status(struct hostapd_data *hapd, const u8 *dst,
 				break;
 		}
 	}
-	if (sta == NULL)
+	if (sta == NULL || !(sta->flags & WLAN_STA_ASSOC)) {
+		wpa_printf(MSG_DEBUG, "Ignore TX status for Data frame to STA "
+			   MACSTR " that is not currently associated",
+			   MAC2STR(dst));
 		return;
+	}
 
 	ieee802_1x_eapol_tx_status(hapd, sta, data, len, ack);
 }

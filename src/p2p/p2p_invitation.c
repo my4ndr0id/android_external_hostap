@@ -2,14 +2,8 @@
  * Wi-Fi Direct - P2P Invitation procedure
  * Copyright (c) 2010, Atheros Communications
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- * Alternatively, this software may be distributed under the terms of BSD
- * license.
- *
- * See README and COPYING for more details.
+ * This software may be distributed under the terms of the BSD license.
+ * See README for more details.
  */
 
 #include "includes.h"
@@ -55,11 +49,7 @@ static struct wpabuf * p2p_build_invitation_req(struct p2p_data *p2p,
 	else if (p2p->inv_role == P2P_INVITE_ROLE_CLIENT)
 		dev_addr = peer->info.p2p_device_addr;
 	else
-#ifdef ANDROID_BRCM_P2P_PATCH
-		dev_addr = p2p->cfg->p2p_dev_addr;
-#else
 		dev_addr = p2p->cfg->dev_addr;
-#endif
 	p2p_buf_add_group_id(buf, dev_addr, p2p->inv_ssid, p2p->inv_ssid_len);
 	p2p_buf_add_device_info(buf, p2p, peer);
 	p2p_buf_update_ie_hdr(buf, len);
@@ -138,7 +128,8 @@ void p2p_process_invitation_req(struct p2p_data *p2p, const u8 *sa,
 		wpa_msg(p2p->cfg->msg_ctx, MSG_DEBUG,
 			"P2P: Invitation Request from unknown peer "
 			MACSTR, MAC2STR(sa));
-		if (p2p_add_device(p2p, sa, rx_freq, 0, data + 1, len - 1, 0)) {
+
+		if (p2p_add_device(p2p, sa, rx_freq, 0, data + 1, len - 1)) {
 			wpa_msg(p2p->cfg->msg_ctx, MSG_DEBUG,
 				"P2P: Invitation Request add device failed "
 				MACSTR, MAC2STR(sa));
