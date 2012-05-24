@@ -9564,17 +9564,13 @@ static int wpa_driver_nl80211_driver_cmd(void *priv, char *cmd, char *buf,
 			ret = 0;
 			if (os_strncasecmp(cmd, "SETBAND", 7) == 0) {
 				wpa_printf(MSG_DEBUG, "%s: %s ", __func__, cmd);
-				ret = strlen(buf);
 			} else if (os_strcasecmp(cmd, "P2P_DEV_ADDR") == 0) {
 				wpa_printf(MSG_DEBUG, "%s: P2P: Device address ("MACSTR")",
 						__func__, MAC2STR(buf));
-				ret = strlen(buf);
 			} else if (os_strcasecmp(cmd, "P2P_SET_PS") == 0) {
 				wpa_printf(MSG_DEBUG, "%s: P2P: %s ", __func__, buf);
-				ret = strlen(buf);
 			} else if (os_strcasecmp(cmd, "P2P_SET_NOA") == 0) {
 				wpa_printf(MSG_DEBUG, "%s: P2P: %s ", __func__, buf);
-				ret = strlen(buf);
 			}
 		}
 	}
