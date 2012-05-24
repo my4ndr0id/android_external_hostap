@@ -32,6 +32,7 @@ struct wpa_bss;
 struct wpa_scan_results;
 struct hostapd_hw_modes;
 struct wpa_driver_associate_params;
+struct wpa_scan_res;
 
 /*
  * Forward declarations of private structures used within the ctrl_iface
