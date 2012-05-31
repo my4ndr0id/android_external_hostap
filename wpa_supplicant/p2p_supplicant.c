@@ -3576,7 +3576,7 @@ int wpas_p2p_group_add_persistent(struct wpa_supplicant *wpa_s,
 
 
 static void wpas_p2p_ie_update(void *ctx, struct wpabuf *beacon_ies,
-			       struct wpabuf *proberesp_ies)
+			       struct wpabuf *proberesp_ies, struct wpabuf *assocresp_ies)
 {
 	struct wpa_supplicant *wpa_s = ctx;
 	if (wpa_s->ap_iface) {
@@ -3584,6 +3584,7 @@ static void wpas_p2p_ie_update(void *ctx, struct wpabuf *beacon_ies,
 		if (!(hapd->conf->p2p & P2P_GROUP_OWNER)) {
 			wpabuf_free(beacon_ies);
 			wpabuf_free(proberesp_ies);
+			wpabuf_free(assocresp_ies);
 			return;
 		}
 		if (beacon_ies) {
@@ -3592,9 +3593,14 @@ static void wpas_p2p_ie_update(void *ctx, struct wpabuf *beacon_ies,
 		}
 		wpabuf_free(hapd->p2p_probe_resp_ie);
 		hapd->p2p_probe_resp_ie = proberesp_ies;
+#ifdef CONFIG_WFD
+		wpabuf_free(hapd->wfd_assoc_resp_ie);
+		hapd->wfd_assoc_resp_ie = assocresp_ies;
+#endif
 	} else {
 		wpabuf_free(beacon_ies);
 		wpabuf_free(proberesp_ies);
+		wpabuf_free(assocresp_ies);
 	}
 	wpa_supplicant_ap_update_beacon(wpa_s);
 }

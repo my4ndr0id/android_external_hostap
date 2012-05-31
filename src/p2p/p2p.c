@@ -2122,6 +2122,10 @@ int p2p_assoc_req_ie(struct p2p_data *p2p, const u8 *bssid, u8 *buf,
 	p2p_buf_add_device_info(tmp, p2p, peer);
 	p2p_buf_update_ie_hdr(tmp, lpos);
 
+#ifdef CONFIG_WFD
+	wfd_add_wfd_ie(p2p->cfg->cb_ctx, p2p->wfd, tmp);
+#endif
+
 	tmplen = wpabuf_len(tmp);
 	if (tmplen > len)
 		res = -1;

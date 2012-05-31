@@ -229,9 +229,8 @@ void wfd_add_wfd_ie(void *ctx, struct wfd_data *wfd, struct wpabuf *ies)
 	}
 }
 
+
 struct wfd_config *wfd_get_config(struct wfd_data *wfd)
 {
 	return wfd->cfg;
 }
-
-

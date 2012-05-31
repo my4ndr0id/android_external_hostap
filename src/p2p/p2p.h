@@ -1248,17 +1248,18 @@ struct p2p_group_config {
 	 * ie_update - Notification of IE update
 	 * @ctx: Callback context from cb_ctx
 	 * @beacon_ies: P2P IE for Beacon frames or %NULL if no change
-	 * @proberesp_ies: P2P Ie for Probe Response frames
+	 * @proberesp_ies: P2P IE for Probe Response frames
+	 * @assocresp_ies: WFD IE for Association Response frames
 	 *
 	 * P2P module uses this callback function to notify whenever the P2P IE
-	 * in Beacon or Probe Response frames should be updated based on group
-	 * events.
+	 * in Beacon or Probe Response frames or the WFD IE in Assocation
+	 * Reponse frames should be updated based on group events.
 	 *
 	 * The callee is responsible for freeing the returned buffer(s) with
 	 * wpabuf_free().
 	 */
 	void (*ie_update)(void *ctx, struct wpabuf *beacon_ies,
-			  struct wpabuf *proberesp_ies);
+			  struct wpabuf *proberesp_ies, struct wpabuf *assocresp_ies);
 
 	/**
 	 * idle_update - Notification of changes in group idle state
