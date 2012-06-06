@@ -39,6 +39,8 @@
  */
 #define P2P_MAX_JOIN_SCAN_ATTEMPTS 10
 
+#define P2P_AUTO_PD_SCAN_ATTEMPTS 5
+
 #ifndef P2P_MAX_CLIENT_IDLE
 /*
  * How many seconds to try to reconnect to the GO when connection in P2P client
@@ -47,12 +49,21 @@
 #define P2P_MAX_CLIENT_IDLE 10
 #endif /* P2P_MAX_CLIENT_IDLE */
 
+#ifndef P2P_MAX_INITIAL_CONN_WAIT
+/*
+ * How many seconds to wait for initial 4-way handshake to get completed after
+ * WPS provisioning step.
+ */
+#define P2P_MAX_INITIAL_CONN_WAIT 10
+#endif /* P2P_MAX_INITIAL_CONN_WAIT */
+
 
 static void wpas_p2p_long_listen_timeout(void *eloop_ctx, void *timeout_ctx);
 static struct wpa_supplicant *
 wpas_p2p_get_group_iface(struct wpa_supplicant *wpa_s, int addr_allocated,
 			 int go);
 static int wpas_p2p_join_start(struct wpa_supplicant *wpa_s);
+static void wpas_p2p_join_scan_req(struct wpa_supplicant *wpa_s, int freq);
 static void wpas_p2p_join_scan(void *eloop_ctx, void *timeout_ctx);
 static int wpas_p2p_join(struct wpa_supplicant *wpa_s, const u8 *iface_addr,
 			 const u8 *dev_addr, enum p2p_wps_method wps_method,
@@ -101,7 +112,6 @@ static int wpas_p2p_scan(void *ctx, enum p2p_scan_type type, int freq,
 	struct wpabuf *wps_ie, *ies;
 	int social_channels[] = { 2412, 2437, 2462, 0, 0 };
 	size_t ielen;
-	int was_in_p2p_scan;
 
 	if (wpa_s->global->p2p_disabled || wpa_s->global->p2p == NULL)
 		return -1;
@@ -152,19 +162,18 @@ static int wpas_p2p_scan(void *ctx, enum p2p_scan_type type, int freq,
 		break;
 	}
 
-	was_in_p2p_scan = wpa_s->scan_res_handler == wpas_p2p_scan_res_handler;
-	wpa_s->scan_res_handler = wpas_p2p_scan_res_handler;
 	ret = wpa_drv_scan(wpa_s, &params);
 
 	wpabuf_free(ies);
 
 	if (ret) {
-		wpa_s->scan_res_handler = NULL;
-		if (wpa_s->scanning || was_in_p2p_scan) {
+		if (wpa_s->scanning ||
+		    wpa_s->scan_res_handler == wpas_p2p_scan_res_handler) {
 			wpa_s->p2p_cb_on_scan_complete = 1;
 			ret = 1;
 		}
-	}
+	} else
+		wpa_s->scan_res_handler = wpas_p2p_scan_res_handler;
 
 	return ret;
 }
@@ -2728,8 +2737,27 @@ static void wpas_p2p_scan_res_join(struct wpa_supplicant *wpa_s,
 	if (wpa_s->p2p_auto_pd) {
 		int join = wpas_p2p_peer_go(wpa_s,
 					    wpa_s->pending_join_dev_addr);
+		if (join == 0 &&
+		    wpa_s->auto_pd_scan_retry < P2P_AUTO_PD_SCAN_ATTEMPTS) {
+			wpa_s->auto_pd_scan_retry++;
+			bss = wpa_bss_get_bssid(wpa_s,
+						wpa_s->pending_join_dev_addr);
+			if (bss) {
+				freq = bss->freq;
+				wpa_printf(MSG_DEBUG, "P2P: Scan retry %d for "
+					   "the peer " MACSTR " at %d MHz",
+					   wpa_s->auto_pd_scan_retry,
+					   MAC2STR(wpa_s->
+						   pending_join_dev_addr),
+					   freq);
+				wpas_p2p_join_scan_req(wpa_s, freq);
+				return;
+			}
+		}
+
 		if (join < 0)
 			join = 0;
+
 		wpa_s->p2p_auto_pd = 0;
 		wpa_s->pending_pd_use = join ? AUTO_PD_JOIN : AUTO_PD_GO_NEG;
 		wpa_printf(MSG_DEBUG, "P2P: Auto PD with " MACSTR " join=%d",
@@ -2873,13 +2901,13 @@ start:
 }
 
 
-static void wpas_p2p_join_scan(void *eloop_ctx, void *timeout_ctx)
+static void wpas_p2p_join_scan_req(struct wpa_supplicant *wpa_s, int freq)
 {
-	struct wpa_supplicant *wpa_s = eloop_ctx;
 	int ret;
 	struct wpa_driver_scan_params params;
 	struct wpabuf *wps_ie, *ies;
 	size_t ielen;
+	int freqs[2] = { 0, 0 };
 
 	os_memset(&params, 0, sizeof(params));
 
@@ -2912,6 +2940,10 @@ static void wpas_p2p_join_scan(void *eloop_ctx, void *timeout_ctx)
 	params.p2p_probe = 1;
 	params.extra_ies = wpabuf_head(ies);
 	params.extra_ies_len = wpabuf_len(ies);
+	if (freq > 0) {
+		freqs[0] = freq;
+		params.freqs = freqs;
+	}
 
 	/*
 	 * Run a scan to update BSS table and start Provision Discovery once
@@ -2930,6 +2962,13 @@ static void wpas_p2p_join_scan(void *eloop_ctx, void *timeout_ctx)
 		eloop_register_timeout(1, 0, wpas_p2p_join_scan, wpa_s, NULL);
 		wpas_p2p_check_join_scan_limit(wpa_s);
 	}
+}
+
+
+static void wpas_p2p_join_scan(void *eloop_ctx, void *timeout_ctx)
+{
+	struct wpa_supplicant *wpa_s = eloop_ctx;
+	wpas_p2p_join_scan_req(wpa_s, 0);
 }
 
 
@@ -3725,6 +3764,17 @@ void wpas_p2p_wps_success(struct wpa_supplicant *wpa_s, const u8 *peer_addr,
 
 	eloop_cancel_timeout(wpas_p2p_group_formation_timeout, wpa_s->parent,
 			     NULL);
+	if (ssid && ssid->mode == WPAS_MODE_INFRA) {
+		/*
+		 * Use a separate timeout for initial data connection to
+		 * complete to allow the group to be removed automatically if
+		 * something goes wrong in this step before the P2P group idle
+		 * timeout mechanism is taken into use.
+		 */
+		eloop_register_timeout(P2P_MAX_INITIAL_CONN_WAIT, 0,
+				       wpas_p2p_group_formation_timeout,
+				       wpa_s, NULL);
+	}
 	if (wpa_s->global->p2p)
 		p2p_wps_success_cb(wpa_s->global->p2p, peer_addr);
 	else if (wpa_s->drv_flags & WPA_DRIVER_FLAGS_P2P_MGMT)
@@ -3778,8 +3828,13 @@ int wpas_p2p_prov_disc(struct wpa_supplicant *wpa_s, const u8 *peer_addr,
 		wpa_s->p2p_auto_pd = 1;
 		wpa_s->p2p_auto_join = 0;
 		wpa_s->pending_pd_before_join = 0;
+		wpa_s->auto_pd_scan_retry = 0;
 		wpas_p2p_stop_find(wpa_s);
 		wpa_s->p2p_join_scan_count = 0;
+		os_get_time(&wpa_s->p2p_auto_started);
+		wpa_printf(MSG_DEBUG, "P2P: Auto PD started at %ld.%06ld",
+			   wpa_s->p2p_auto_started.sec,
+			   wpa_s->p2p_auto_started.usec);
 		wpas_p2p_join_scan(wpa_s, NULL);
 		return 0;
 	}
@@ -3829,7 +3884,8 @@ int wpas_p2p_find(struct wpa_supplicant *wpa_s, unsigned int timeout,
 	if (wpa_s->drv_flags & WPA_DRIVER_FLAGS_P2P_MGMT)
 		return wpa_drv_p2p_find(wpa_s, timeout, type);
 
-	if (wpa_s->global->p2p_disabled || wpa_s->global->p2p == NULL)
+	if (wpa_s->global->p2p_disabled || wpa_s->global->p2p == NULL ||
+	    wpa_s->p2p_in_provisioning)
 		return -1;
 
 	wpa_supplicant_cancel_sched_scan(wpa_s);
@@ -4129,6 +4185,11 @@ void wpas_p2p_completed(struct wpa_supplicant *wpa_s)
 	int persistent;
 	int freq;
 
+	if (ssid == NULL || ssid->mode != WPAS_MODE_P2P_GROUP_FORMATION) {
+		eloop_cancel_timeout(wpas_p2p_group_formation_timeout,
+				     wpa_s->parent, NULL);
+	}
+
 	if (!wpa_s->show_group_started || !ssid)
 		return;
 
@@ -4266,6 +4327,19 @@ static void wpas_p2p_set_group_idle_timeout(struct wpa_supplicant *wpa_s)
 		 */
 		wpa_printf(MSG_DEBUG, "P2P: Do not use P2P group idle timeout "
 			   "during provisioning");
+		return;
+	}
+
+	if (wpa_s->show_group_started) {
+		/*
+		 * Use the normal group formation timeout between the end of
+		 * the provisioning phase and completion of 4-way handshake to
+		 * avoid terminating this process too early due to group idle
+		 * timeout.
+		 */
+		wpa_printf(MSG_DEBUG, "P2P: Do not use P2P group idle timeout "
+			   "while waiting for initial 4-way handshake to "
+			   "complete");
 		return;
 	}
 
