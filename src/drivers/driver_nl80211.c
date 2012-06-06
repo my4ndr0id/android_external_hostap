@@ -420,17 +420,24 @@ static int wpa_driver_nl80211_disassociate(void *priv, const u8 *addr,
 					   int reason_code);
 static void roaming_scan_handler(void *eloop_ctx, void *timeout_ctx);
 
-static void seamless_roaming_disconnect(struct wpa_driver_nl80211_data *drv)
+static int seamless_roaming_disconnect(struct wpa_driver_nl80211_data *drv)
 {
+	struct wpa_supplicant *wpa_s = drv->ctx;
 	drv->flag_roaming = 0;
 	drv->flag_roam_scan = 0;
 	drv->flag_roam_state = 0;
 	drv->flag_disconnect_state = 0;
 	drv->in_low_rssi_state = 0;
 	drv->associated = 0;
+	if (wpa_s->wpa_state < WPA_ASSOCIATING) {
+		wpa_printf(MSG_DEBUG, "[SeamLess] Do not send Event DISASSOC"
+			" in Scanning State wpa_state=%d", wpa_s->wpa_state);
+		return 0;
+	}
 	wpa_printf(MSG_DEBUG, "[SeamLess] Event DISASSOC is Generated %s:%d",
 							__func__, __LINE__);
 	wpa_supplicant_event(drv->ctx, EVENT_DISASSOC, NULL);
+	return 1;
 }
 
 static void roaming_timeout_handler(void *eloop_ctx, void *timeout_ctx)
