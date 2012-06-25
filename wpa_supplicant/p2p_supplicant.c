@@ -3313,12 +3313,39 @@ static int wpas_p2p_init_go_params(struct wpa_supplicant *wpa_s,
 		params->freq = 2407 + 5 * wpa_s->conf->p2p_oper_channel;
 		wpa_printf(MSG_DEBUG, "P2P: Set GO freq based on configured "
 			   "frequency %d MHz", params->freq);
-	} else if (wpa_s->conf->p2p_oper_reg_class == 115 ||
-		   wpa_s->conf->p2p_oper_reg_class == 124) {
+	}
+#ifdef ANDROID_QCOM_P2P_PATCH
+	else if (((wpa_s->conf->p2p_oper_reg_class == 115) &&
+			(wpa_s->conf->p2p_oper_channel >= 36) &&
+			(wpa_s->conf->p2p_oper_channel <= 48)) ||
+			((wpa_s->conf->p2p_oper_reg_class == 124) &&
+			 (wpa_s->conf->p2p_oper_channel >= 149) &&
+			 (wpa_s->conf->p2p_oper_channel <= 161)) ||
+			((wpa_s->conf->p2p_oper_reg_class == 116) &&
+			 (wpa_s->conf->p2p_oper_channel >= 36) &&
+			 (wpa_s->conf->p2p_oper_channel <= 44)) ||
+			((wpa_s->conf->p2p_oper_reg_class == 117) &&
+			 (wpa_s->conf->p2p_oper_channel >= 40) &&
+			 (wpa_s->conf->p2p_oper_channel <= 48)) ||
+			((wpa_s->conf->p2p_oper_reg_class == 126) &&
+			 (wpa_s->conf->p2p_oper_channel >= 149) &&
+			 (wpa_s->conf->p2p_oper_channel <= 157)) ||
+			((wpa_s->conf->p2p_oper_reg_class == 127) &&
+			 (wpa_s->conf->p2p_oper_channel >= 153) &&
+			 (wpa_s->conf->p2p_oper_channel <= 161))) {
 		params->freq = 5000 + 5 * wpa_s->conf->p2p_oper_channel;
 		wpa_printf(MSG_DEBUG, "P2P: Set GO freq based on configured "
 			   "frequency %d MHz", params->freq);
-	} else if (wpa_s->conf->p2p_oper_channel == 0 &&
+	}
+#else
+	else if (wpa_s->conf->p2p_oper_reg_class == 115 ||
+			wpa_s->conf->p2p_oper_reg_class == 124) {
+		params->freq = 5000 + 5 * wpa_s->conf->p2p_oper_channel;
+		wpa_printf(MSG_DEBUG, "P2P: Set GO freq based on configured "
+			   "frequency %d MHz", params->freq);
+	}
+#endif
+	else if (wpa_s->conf->p2p_oper_channel == 0 &&
 		   wpa_s->best_overall_freq > 0 &&
 		   p2p_supported_freq(wpa_s->global->p2p,
 				      wpa_s->best_overall_freq)) {
