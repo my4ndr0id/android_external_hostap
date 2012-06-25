@@ -560,6 +560,7 @@ struct wpa_supplicant {
 #ifdef ANDROID
 #ifdef SEAMLESS_ROAMING
 	int en_roaming;
+	int en_roaming_current;
 #endif
 #endif
 };

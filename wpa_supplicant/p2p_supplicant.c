@@ -271,6 +271,14 @@ static void wpas_p2p_group_delete(struct wpa_supplicant *wpa_s, int silent)
 			wpa_s->ifname, gtype, reason);
 	}
 
+#ifdef ANDROID
+#ifdef SEAMLESS_ROAMING
+	wpa_s->en_roaming = wpa_s->en_roaming_current;
+	wpa_printf(MSG_INFO, "[Seamless] %s Seamless roaming",
+			wpa_s->en_roaming ? "Enabled" : "Disabled");
+#endif
+#endif
+
 	if (eloop_cancel_timeout(wpas_p2p_group_idle_timeout, wpa_s, NULL) > 0)
 		wpa_printf(MSG_DEBUG, "P2P: Cancelled P2P group idle timeout");
 
@@ -604,6 +612,14 @@ static void wpas_group_formation_completed(struct wpa_supplicant *wpa_s,
 		wpas_p2p_cross_connect_setup(wpa_s);
 		wpas_p2p_set_group_idle_timeout(wpa_s);
 	}
+
+#ifdef ANDROID
+#ifdef SEAMLESS_ROAMING
+	wpa_printf(MSG_INFO, "[Seamless] Disablling Seamless Roaming");
+	wpa_s->en_roaming_current = wpa_s->en_roaming;
+	wpa_s->en_roaming = 0;
+#endif
+#endif
 
 	if (persistent)
 		network_id = wpas_p2p_store_persistent_group(wpa_s->parent,
@@ -4122,6 +4138,14 @@ void wpas_p2p_completed(struct wpa_supplicant *wpa_s)
 			MAC2STR(go_dev_addr),
 			persistent ? " [PERSISTENT]" : "");
 	}
+
+#ifdef ANDROID
+#ifdef SEAMLESS_ROAMING
+	wpa_printf(MSG_INFO, "[Seamless] Disablling Seamless Roaming");
+	wpa_s->en_roaming_current = wpa_s->en_roaming;
+	wpa_s->en_roaming = 0;
+#endif
+#endif
 
 	if (persistent)
 		network_id = wpas_p2p_store_persistent_group(wpa_s->parent,

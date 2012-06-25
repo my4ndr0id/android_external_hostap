@@ -2368,6 +2368,11 @@ static void nl80211_spurious_frame(struct i802_bss *bss, struct nlattr **tb,
 static void do_process_drv_event(struct wpa_driver_nl80211_data *drv,
 				 int cmd, struct nlattr **tb)
 {
+#ifdef ANDROID
+#ifdef SEAMLESS_ROAMING
+	struct wpa_supplicant *wpa_s = (struct wpa_supplicant *)(drv->ctx);
+#endif
+#endif
 	if (drv->ap_scan_as_station != NL80211_IFTYPE_UNSPECIFIED &&
 	    (cmd == NL80211_CMD_NEW_SCAN_RESULTS ||
 	     cmd == NL80211_CMD_SCAN_ABORTED)) {
@@ -2391,7 +2396,7 @@ static void do_process_drv_event(struct wpa_driver_nl80211_data *drv,
 		wpa_printf(MSG_DEBUG, "nl80211: New scan results available");
 #ifdef ANDROID
 #ifdef SEAMLESS_ROAMING
-		if (drv->flag_roam_scan) {
+		if (wpa_s->en_roaming && drv->flag_roam_scan) {
 			struct wpa_scan_res *bss;
 			struct wpa_supplicant *wpa_s = (struct wpa_supplicant *)(drv->ctx);
 			unsigned int i;
