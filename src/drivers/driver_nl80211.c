@@ -1434,42 +1434,47 @@ static void mlme_event_disconnect(struct wpa_driver_nl80211_data *drv,
 		struct wpa_supplicant *wpa_s = (struct wpa_supplicant *)(drv->ctx);
 
 		if (wpa_s->en_roaming && !wpa_s->p2p_group_interface) {
-			if (drv->flag_roaming || drv->flag_roam_state) {
-				if (!drv->in_low_rssi_state &&
-					drv->flag_roam_state) {
-					/*
-					 * We are in process of roaming So
-					 * we need immedately connect to
-					 * another AP
-					 */
-					drv->flag_disconnect_state = 1;
-					if (!drv->flag_roam_scan) {
-						eloop_register_timeout(0, 20,
-						roaming_scan_handler,
-						(void *)drv,
-						(void *)drv->roam_scan_data);
-					}
-					return;
-				} else if (drv->in_low_rssi_state &&
+			if (reason || drv->in_low_rssi_state) {
+				if (drv->flag_roaming || drv->flag_roam_state) {
+					if (!drv->in_low_rssi_state &&
+						drv->flag_roam_state) {
+						/*
+						 * We are in process of roaming
+						 * So we need immedately connect to
+						 * another AP
+						 */
+						drv->flag_disconnect_state = 1;
+						if (!drv->flag_roam_scan) {
+							eloop_register_timeout(0, 20,
+							roaming_scan_handler,
+							(void *)drv,
+							(void *)drv->roam_scan_data);
+						}
+						return;
+					} else if (drv->in_low_rssi_state &&
 							drv->flag_roaming) {
-					return;/* Already in roaming */
-				} else {
-					seamless_roaming_disconnect(drv);
+						return;/* Already in roaming */
+					} else {
+						seamless_roaming_disconnect(drv);
+						return;
+					}
+				}
+				if (!drv->flag_disconnect_state &&
+						 !drv->flag_roam_state) {
+					drv->flag_roam_state = 1;
+					drv->flag_disconnect_state = 1;
+					eloop_register_timeout(0, 20,
+							roaming_scan_handler,
+							(void *)drv,
+							(void *)drv->roam_scan_data);
 					return;
 				}
+				drv->flag_roaming = 0;
+				drv->flag_roam_scan = 0;
+				drv->flag_roam_state = 0;
+				drv->flag_disconnect_state = 0;
+				drv->in_low_rssi_state = 0;
 			}
-			if (!drv->flag_disconnect_state && !drv->flag_roam_state) {
-				drv->flag_roam_state = 1;
-				drv->flag_disconnect_state = 1;
-				eloop_register_timeout(0, 20, roaming_scan_handler, (void *)drv,
-							(void *)drv->roam_scan_data);
-				return;
-			}
-			drv->flag_roaming = 0;
-			drv->flag_roam_scan = 0;
-			drv->flag_roam_state = 0;
-			drv->flag_disconnect_state = 0;
-			drv->in_low_rssi_state = 0;
 		}
 	}
 #endif
