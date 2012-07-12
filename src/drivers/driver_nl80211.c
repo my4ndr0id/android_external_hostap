@@ -1433,7 +1433,7 @@ static void mlme_event_disconnect(struct wpa_driver_nl80211_data *drv,
 	{
 		struct wpa_supplicant *wpa_s = (struct wpa_supplicant *)(drv->ctx);
 
-		if (wpa_s->en_roaming) {
+		if (wpa_s->en_roaming && !wpa_s->p2p_group_interface) {
 			if (drv->flag_roaming || drv->flag_roam_state) {
 				if (!drv->in_low_rssi_state &&
 					drv->flag_roam_state) {
@@ -8860,6 +8860,7 @@ static int nl80211_signal_poll(void *priv, struct wpa_signal_info *si)
 {
 	struct i802_bss *bss = priv;
 	struct wpa_driver_nl80211_data *drv = bss->drv;
+	struct wpa_supplicant *wpa_s = (struct wpa_supplicant *)(drv->ctx);
 	int res;
 
 	os_memset(si, 0, sizeof(*si));
@@ -8869,7 +8870,7 @@ static int nl80211_signal_poll(void *priv, struct wpa_signal_info *si)
 #ifdef ANDROID
 #ifdef SEAMLESS_ROAMING
 	drv->latest_rssi_val = si->current_signal;
-	if (!drv->flag_disconnect_state) {
+	if (!drv->flag_disconnect_state  && !wpa_s->p2p_group_interface) {
 		if (!drv->flag_roam_state &&
 				(drv->latest_rssi_val <
 					NL80211_SEAMLESS_LOW_RSSI_THRESHOLD)) {
